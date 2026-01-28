@@ -22,4 +22,4 @@ jobs:
 
       - name: Upload Glue scripts to S3
         run: |
-          aws s3 sync glue_jobs/ s3://citibike-glue-scripts/
+          aws s3 sync glue_jobs/ s3://citibike-data-lake-group7/glue_scripts/
