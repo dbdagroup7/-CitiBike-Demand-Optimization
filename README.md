@@ -167,5 +167,3 @@ Power BI dashboards provide:
 - Automated anomaly detection  
 
 ---
-
-This documentation serves as the foundation for the GitHub README and future project extensions.
