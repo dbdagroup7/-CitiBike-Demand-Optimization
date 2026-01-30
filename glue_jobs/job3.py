@@ -34,7 +34,7 @@ print(f"[JOB-3] Starting GOLD aggregation job for year={YEAR}")
 # ==========================================================
 # S3 Paths
 # ==========================================================
-SILVER_PATH = f"s3://{BUCKET}/data/curated/citibike_enriched/{YEAR}/"
+SILVER_PATH = f"s3://{BUCKET}/data/silver_cleaned_transformed/citibike_enriched/{YEAR}/"
 
 GOLD_BASE = f"s3://{BUCKET}/data/gold/{YEAR}/"
 DIM_CALENDAR_PATH = f"{GOLD_BASE}/dim_calendar/"
@@ -164,7 +164,7 @@ rush_user.coalesce(10).write.mode("overwrite").parquet(RUSH_HOUR_USER_PATH)
 # TRIPS BY HOUR
 # ==========================================================
 trips_by_hour = (
-    df.groupBy("start_hour", "month")
+    df.groupBy("trip_date", "start_hour")
       .agg(
           F.count("*").alias("total_trips"),
           F.avg("trip_duration_min").alias("avg_duration_minutes")
@@ -177,7 +177,7 @@ trips_by_hour.coalesce(20).write.mode("overwrite").parquet(TRIPS_BY_HOUR_PATH)
 # TRIPS BY TEMPERATURE CATEGORY
 # ==========================================================
 temp_pattern = (
-    df.groupBy("temp_category", "month")
+    df.groupBy("trip_date", "temp_category")
       .agg(
           F.count("*").alias("total_trips"),
           F.avg("trip_duration_min").alias("avg_duration_minutes"),
@@ -191,7 +191,7 @@ temp_pattern.coalesce(20).write.mode("overwrite").parquet(TEMP_PATTERN_PATH)
 # TOP START STATIONS
 # ==========================================================
 top_stations = (
-    df.groupBy("start_station_id", "start_station_name", "month")
+    df.groupBy("trip_date", "start_station_id", "start_station_name")
       .agg(
           F.count("*").alias("total_trips"),
           F.avg("trip_duration_min").alias("avg_duration_minutes"),
@@ -205,12 +205,12 @@ top_stations.coalesce(30).write.mode("overwrite").parquet(TOP_STATIONS_PATH)
 # STATION IMBALANCE
 # ==========================================================
 outflow = (
-    df.groupBy("start_station_id", "start_station_name", "month")
+    df.groupBy("trip_date", "start_station_id", "start_station_name")
       .agg(F.count("*").alias("outflow"))
 )
 
 inflow = (
-    df.groupBy("end_station_id", "end_station_name", "month")
+    df.groupBy("trip_date", "end_station_id", "end_station_name")
       .agg(F.count("*").alias("inflow"))
       .withColumnRenamed("end_station_id", "start_station_id")
       .withColumnRenamed("end_station_name", "start_station_name")
@@ -219,7 +219,7 @@ inflow = (
 station_balance = (
     outflow.join(
         inflow,
-        ["start_station_id", "start_station_name", "month"],
+        ["start_station_id", "start_station_name", "trip_date"],
         "outer"
     )
     .fillna(0)
