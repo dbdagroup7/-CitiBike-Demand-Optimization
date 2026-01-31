@@ -4,7 +4,7 @@ An end-to-end cloud-based data analytics and visualization platform built using 
 
 ---
 
-## 1. Project Overview
+## Project Overview
 
 The CitiBike Demand Optimization project focuses on building an end-to-end, cloud-based data analytics and visualization platform using NYC CitiBike trip data integrated with historical weather data. The objective is to analyze bike usage patterns, understand the impact of weather on ridership, and enable data-driven demand optimization through scalable analytics.
 
@@ -12,22 +12,7 @@ The project follows a modern serverless data architecture on AWS, leveraging dis
 
 ---
 
-## 2. High-Level Architecture & Execution Flow
-
-1. Raw CitiBike trip data and historical weather data are ingested from multiple sources.  
-2. Raw datasets are stored in Amazon S3 (raw layer).  
-3. AWS Glue Job 1 performs data cleaning and standardization.  
-4. AWS Glue Job 2 merges CitiBike and weather datasets and applies feature engineering and transformations.  
-5. AWS Glue Job 3 aggregates data for analytical use cases.  
-6. Cleaned and partitioned datasets are written back to Amazon S3 (processed layer).  
-7. Amazon Athena is used to query curated datasets directly from S3.  
-8. Power BI connects to Athena via ODBC to build interactive dashboards.  
-9. GitHub Actions manages CI/CD for ETL jobs and workflow updates.  
-10. Infrastructure is managed using Infrastructure as Code (IaC).
-
----
-
-## 3. Services, Tools, and Technologies Used
+## Services, Tools, and Technologies Used
 
 ### Cloud & Data Engineering
 
@@ -60,19 +45,141 @@ In this project, IAM roles and policies control access to S3, Glue, Athena, and 
 
 ---
 
-## 4. Data Ingestion Layer
+## 1. Datasets Used
 
-### CitiBike Trip Data
-- Source: NYC CitiBike public trip history datasets  
-- Format: CSV  
-- Frequency: Monthly historical files  
+This project uses two datasets to analyze CitiBike demand and its dependency on weather conditions in New York City.
 
-### Weather Data
-- Source: NOAA historical weather datasets  
-- Format: CSV  
-- Granularity: Daily observations  
+### CitiBike NYC Trip Data
+- **Source:** NYC CitiBike System Data  
+- **Link:** https://citibikenyc.com/system-data  
+- **Description:** Ride-level data containing trip times, station details, bike type, and user category  
+- **Format:** CSV (monthly historical data)
 
-Both datasets are ingested and stored in Amazon S3 without modification in the raw zone.
+### Weather Data (NOAA)
+- **Source:** NOAA – Global Summary of the Day  
+- **Link:** https://www.ncei.noaa.gov/data/global-summary-of-the-day/archive/  
+- **Description:** Daily weather data including temperature, precipitation, wind speed, and weather events  
+- **Format:** CSV
+
+---
+
+## 2. Exploratory Data Analysis (EDA) – Key Findings
+
+Based on the initial exploratory analysis, the following observations were made:
+
+### Dataset Size & Structure
+- **Total Records:** 24.36 Million ride records  
+- **Total Columns:** 41 columns after merging CitiBike and weather datasets  
+- **File Size:** 1.36 GBs, confirming large-scale historical data  
+
+---
+
+### Time Coverage
+- **Ride Data Period:** Covers all months from January to August 2025  
+- **Weather Data Granularity:** Daily observations aligned with ride dates  
+- Data shows continuous temporal coverage with no major gaps in dates  
+
+---
+
+### User & Bike Distribution
+- **User Type:**  
+  - Member users contribute the majority of rides  
+  - Casual users form a smaller but significant share  
+- **Bike Type:**  
+  - Classic bikes dominate overall usage  
+  - Electric bikes represent a smaller proportion  
+
+---
+
+### Trip Duration Analysis
+- **Average Trip Duration:** ~10–15 minutes  
+- **Majority of Trips:** Less than 30 minutes  
+- **Outliers:**  
+  - Very long trips (> 24 hours) detected  
+  - These were treated as anomalies during transformation  
+
+---
+
+### Station-Level Observations
+- A limited number of stations contribute to a high volume of total trips  
+- Start and end station distributions indicate demand hotspots in central locations  
+
+---
+
+### Weather Data Observations
+- **Temperature Range:** Falls within expected seasonal NYC ranges  
+- **Precipitation:**  
+  - Most days have low or zero precipitation  
+  - Heavy precipitation events are rare  
+- **Wind Speed:** Mostly low to moderate values  
+
+---
+
+### Weather Event Indicators
+- Columns such as `FRSHTT` indicate:  
+  - Rain events occur more frequently than snow or thunder  
+  - Snow and thunder events are relatively rare  
+
+---
+
+### Data Quality Findings
+- **Missing Values:**  
+  - Minimal nulls in core ride fields  
+  - Weather columns contain placeholder values (e.g., `999.9`) indicating missing measurements  
+- **Duplicates:**  
+  - Duplicate ride records were negligible  
+- **Invalid Values:**  
+  - Some unrealistic trip durations and distances were identified  
+
+---
+
+### Key EDA Conclusion
+The dataset is large, well-structured, and suitable for analytics, with a small number of anomalies and missing weather values.  
+EDA findings directly influenced data cleaning rules, feature engineering logic, outlier handling, and aggregation strategies used in the ETL pipeline.
+
+---
+
+## 3. Project Architecture
+
+<p align="center">
+  <img src="images/architecture.png" width="850"/>
+</p>
+<p align="center">
+  <b>Figure:</b> End-to-end architecture of the CitiBike Demand Optimization pipeline
+</p>
+
+---
+
+## 4. Data Processing Using AWS Glue (Silver Layer)
+
+This stage processes raw CitiBike and weather data using AWS Glue (PySpark) and prepares an enriched, analytics-ready dataset.
+
+### 4.1 Data Cleaning
+- Converted timestamps, latitude, longitude, and numeric fields to correct data types  
+- Removed records with invalid or missing critical values  
+- Filtered trips with unrealistic durations  
+- Restricted trips to valid New York City geographic boundaries  
+- Handled missing and sentinel weather values  
+
+---
+
+### 4.2 Data Merging
+- Integrated CitiBike trip data with daily weather data using `trip_date`  
+- Retained only records with valid and usable weather observations  
+- Created a unified dataset combining ride behavior with environmental conditions  
+
+---
+
+### 4.3 Data Transformation & Feature Engineering
+- Calculated trip duration and trip distance (Haversine formula)  
+- Derived temporal features: day of week, month, year, season, start hour  
+- Generated analytical flags: weekend, rush hour, holiday, round trip  
+- Created weather event indicators (rain, snow, fog, thunder, hail)  
+- Categorized temperature and precipitation into business-friendly groups  
+
+---
+
+The final output is stored in Amazon S3 as Parquet files, partitioned by year and month.
 
 ---
 
@@ -105,65 +212,87 @@ Both datasets are ingested and stored in Amazon S3 without modification in the r
 
 ---
 
-## 6. Data Transformation & Feature Engineering
+## 6. Gold Layer – Aggregation Tables for Analytics
 
-After merging, multiple transformations are applied:
-- Timestamp parsing and standardization  
-- Trip duration calculation  
-- Rush hour identification  
-- Day, month, and year extraction  
-- Seasonal classification  
-- Weather categorization (rain, snow, fog, thunder)  
-- Wind speed and precipitation categorization  
-- Round trip detection  
-- Outlier handling for trip distance and duration  
+In this stage, enriched Silver-layer data is aggregated into multiple Gold-layer tables optimized for analytics and dashboard consumption.
 
-These transformations enrich the dataset and make it analytics-ready.
-
----
-
-## 7. Data Partitioning Strategy
-
-- Data is stored in Parquet format  
+### 6.1 Fact Table Creation
+- Central fact table with ride-level analytical attributes  
 - Partitioned by year and month  
-- Enables efficient Athena partition pruning  
-- Reduces query cost and improves performance  
+
+### 6.2 Time-Based Aggregations
+- Hourly aggregation for peak demand  
+- Daily aggregation for trend analysis  
+
+### 6.3 Bike & Weather-Based Aggregations
+- Bike type-based aggregation  
+- Temperature category-based aggregation  
+
+### 6.4 Station-Level Aggregation
+- Trips started and ended per station  
+- Total station activity  
+
+### 6.5 Summary Metrics
+- Total trips  
+- Average trip distance  
+- Average trip duration  
+- Average temperature  
+- Peak usage hour  
+
+All Gold-layer outputs are stored using a run-based (`run_id`) strategy.
 
 ---
 
-## 8. Analytics & Visualization Layer
+## 7. Key Performance Indicators (KPIs) & Dashboard Charts
 
-Power BI dashboards provide:
-- Peak riding hours analysis  
-- Station-level demand trends  
-- User segmentation (member vs casual)  
-- Weather impact on ridership  
-- Geographic ride patterns using maps  
+### KPI 1: Total Trips
+Measures overall ride demand.
+
+**Supporting Charts:**  
+- Total Trips by Bike Type  
+- Member vs Casual Trip Share  
+
+### KPI 2: Average Trip Distance
+Analyzes typical ride distance.
+
+**Supporting Charts:**  
+- Station Utilization Rate by Bike Type  
+- Station Imbalance Analysis  
+
+### KPI 3: Average Trip Duration
+Evaluates average ride time.
+
+**Supporting Charts:**  
+- Trips by Temperature  
+
+### KPI 4: Peak Usage Hour
+Identifies busiest hour of the day.
+
+**Supporting Charts:**  
+- Total Trips by Start Hour  
+
+### KPI 5: Rush Hour Usage Ratio
+Analyzes rush hour demand.
+
+**Supporting Charts:**  
+- Rush Hour vs Non-Rush Hour Usage by User Type  
+
+### KPI 6: Weekend Usage Ratio
+Compares weekday and weekend usage.
+
+**Supporting Charts:**  
+- Weekend Usage Distribution  
 
 ---
 
-## 9. CI/CD & Project Management
+## 8. Infrastructure as Code (Terraform) & CI/CD Implementation
 
-- GitHub used for version control and collaboration  
-- GitHub Actions automate ETL pipeline updates  
-- Jira used for sprint planning, task tracking, and timelines  
+### Infrastructure as Code (Terraform)
+- Provisioned S3 buckets for raw, silver, and gold layers  
+- Managed IAM roles for Glue and Athena  
 
----
+### CI/CD Pipeline (GitHub Actions)
+- Automated Glue job deployments  
+- Triggered pipelines on code updates  
 
-## 10. Outcome & Business Value
-
-- Scalable and cost-efficient analytics platform  
-- Faster insights into demand patterns  
-- Improved decision-making for bike allocation and planning  
-- Production-grade cloud data engineering implementation  
-
----
-
-## 11. Future Enhancements
-
-- Demand forecasting using machine learning  
-- Real-time streaming ingestion  
-- Station-level recommendation engine  
-- Automated anomaly detection  
-
----
+Terraform and CI/CD together enable a fully automated, reproducible, and production-ready data engineering workflow.
