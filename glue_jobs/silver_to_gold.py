@@ -32,23 +32,25 @@ job.init(args['JOB_NAME'], args)
 print(f"[JOB-3] Starting GOLD aggregation job for year={YEAR}")
 
 # ==========================================================
-# S3 Paths
+# S3 Paths (UPDATED – Job 2)
 # ==========================================================
-SILVER_PATH = f"s3://{BUCKET}/data/silver_cleaned_transformed/citibike_enriched/{YEAR}/"
 
-GOLD_BASE = f"s3://{BUCKET}/data/gold/{YEAR}/"
+SILVER_PATH = f"s3://{BUCKET}/data/silver/citibike/{YEAR}/"
+
+GOLD_BASE = f"s3://{BUCKET}/data/gold/citibike/{YEAR}"
+
 DIM_CALENDAR_PATH = f"{GOLD_BASE}/dim_calendar/"
 
-KPI_PATH                  = f"{GOLD_BASE}/gold_kpi_cards/"
-MEMBER_SHARE_PATH         = f"{GOLD_BASE}/gold_member_casual_share/"
-BIKE_TYPE_PATH            = f"{GOLD_BASE}/gold_trips_by_bike_type/"
-WEEKEND_USER_PATH         = f"{GOLD_BASE}/gold_weekend_weekday_user/"
-RUSH_HOUR_USER_PATH        = f"{GOLD_BASE}/gold_rush_hour_user/"
-TRIPS_BY_HOUR_PATH        = f"{GOLD_BASE}/gold_trips_by_hour/"
-TEMP_PATTERN_PATH         = f"{GOLD_BASE}/gold_trips_by_temperature/"
-TOP_STATIONS_PATH         = f"{GOLD_BASE}/gold_top_start_stations/"
-STATION_IMBALANCE_PATH    = f"{GOLD_BASE}/gold_station_imbalance/"
-DAILY_AGG_PATH             = f"{GOLD_BASE}/gold_daily_aggregates/"
+KPI_PATH               = f"{GOLD_BASE}/gold_kpi_cards/"
+MEMBER_SHARE_PATH      = f"{GOLD_BASE}/gold_member_casual_share/"
+BIKE_TYPE_PATH         = f"{GOLD_BASE}/gold_trips_by_bike_type/"
+WEEKEND_USER_PATH      = f"{GOLD_BASE}/gold_weekend_weekday_user/"
+RUSH_HOUR_USER_PATH    = f"{GOLD_BASE}/gold_rush_hour_user/"
+TRIPS_BY_HOUR_PATH     = f"{GOLD_BASE}/gold_trips_by_hour/"
+TEMP_PATTERN_PATH      = f"{GOLD_BASE}/gold_trips_by_temperature/"
+TOP_STATIONS_PATH      = f"{GOLD_BASE}/gold_top_start_stations/"
+STATION_IMBALANCE_PATH = f"{GOLD_BASE}/gold_station_imbalance/"
+DAILY_AGG_PATH         = f"{GOLD_BASE}/gold_daily_aggregates/"
 
 # ==========================================================
 # Read Silver Layer

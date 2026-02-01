@@ -34,13 +34,14 @@ job.init(args['JOB_NAME'], args)
 print(f"[SILVER JOB] Starting for YEAR={YEAR}")
 
 # ==========================================================
-# Paths
+# Paths (UPDATED)
 # ==========================================================
-CITIBIKE_RAW = f"s3://{BUCKET}/data/raw/citibike/{YEAR}/"
-WEATHER_RAW  = f"s3://{BUCKET}/data/raw/weather/{YEAR}_weather.csv"
 
-SILVER_OUT   = f"s3://{BUCKET}/data/silver_cleaned_transformed/citibike_enriched/{YEAR}/"
+CITIBIKE_RAW = f"s3://{BUCKET}/data/raw/citibike/"
 
+WEATHER_RAW = f"s3://{BUCKET}/data/raw/weather/{YEAR}_weather.csv"
+
+SILVER_OUT = f"s3://{BUCKET}/data/silver/{YEAR}/"
 # ==========================================================
 # Read CitiBike
 # ==========================================================
