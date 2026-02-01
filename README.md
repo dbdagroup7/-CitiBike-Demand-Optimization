@@ -68,9 +68,9 @@ This project uses two datasets to analyze CitiBike demand and its dependency on 
 Based on the initial exploratory analysis, the following observations were made:
 
 ### Dataset Size & Structure
-- **Total Records:** 24.36 Million ride records  
+- **Total Records:** 29.48 Million ride records  
 - **Total Columns:** 41 columns after merging CitiBike and weather datasets  
-- **File Size:** 1.36 GBs, confirming large-scale historical data  
+- **File Size:** 1.65 GBs, confirming large-scale historical data  
 
 ---
 
