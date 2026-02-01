@@ -183,7 +183,7 @@ This stage processes raw CitiBike and weather data using AWS Glue (PySpark) and 
 
 ---
 
-The final output is stored in Amazon S3 as Parquet files, partitioned by year and month.
+The final output is stored in Amazon S3 as Parquet files.
 
 ---
 
