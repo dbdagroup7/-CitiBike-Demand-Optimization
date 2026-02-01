@@ -1,18 +1,15 @@
-# Glue database
+﻿# Glue database
 resource "aws_glue_catalog_database" "citibike_db" {
   name        = "${var.project_name}_${var.environment}_db"
   description = "CitiBike analytics database"
 }
-
-# Job 1: Raw → Silver
 resource "aws_glue_job" "job1_bronze_to_silver" {
   name     = "${var.project_name}-${var.environment}-job1-bronze-to-silver"
   role_arn = aws_iam_role.glue_role.arn
 
   command {
-    name           = "glueetl"
-    python_version = "3"
-    # CHANGE script key if your script name/folder differs
+    name            = "glueetl"
+    python_version  = "3"
     script_location = "s3://${var.s3_bucket_name}/glue_scripts/raw_to_silver.py"
   }
 
@@ -27,21 +24,24 @@ resource "aws_glue_job" "job1_bronze_to_silver" {
     "--enable-continuous-cloudwatch-log" = "true"
     "--enable-spark-ui"                  = "true"
     "--TempDir"                          = "s3://${var.s3_bucket_name}/temp/"
-    "--raw_path"                         = "s3://${var.s3_bucket_name}/data/raw/citibike/"
-    "--silver_path"                      = "s3://${var.s3_bucket_name}/data/silver/citibike/"
-    "--database_name"                    = aws_glue_catalog_database.citibike_db.name
+
+    "--raw_path"      = "s3://${var.s3_bucket_name}/data/raw/citibike/"
+    "--silver_path"   = "s3://${var.s3_bucket_name}/data/silver/citibike/"
+    "--database_name" = aws_glue_catalog_database.citibike_db.name
+
+    # 🔥 REQUIRED ARGUMENTS
+    "--BUCKET" = var.s3_bucket_name
+    "--YEAR"   = "2025"
   }
 }
 
-# Job 2: Silver → Gold
 resource "aws_glue_job" "job2_silver_to_gold" {
   name     = "${var.project_name}-${var.environment}-job2-silver-to-gold"
   role_arn = aws_iam_role.glue_role.arn
 
   command {
-    name           = "glueetl"
-    python_version = "3"
-    # CHANGE script key if your script name/folder differs
+    name            = "glueetl"
+    python_version  = "3"
     script_location = "s3://${var.s3_bucket_name}/glue_scripts/silver_to_gold.py"
   }
 
@@ -56,11 +56,17 @@ resource "aws_glue_job" "job2_silver_to_gold" {
     "--enable-continuous-cloudwatch-log" = "true"
     "--enable-spark-ui"                  = "true"
     "--TempDir"                          = "s3://${var.s3_bucket_name}/temp/"
-    "--silver_path"                      = "s3://${var.s3_bucket_name}/data/silver/citibike/"
-    "--gold_path"                        = "s3://${var.s3_bucket_name}/data/gold/citibike/"
-    "--database_name"                    = aws_glue_catalog_database.citibike_db.name
+
+    "--silver_path"   = "s3://${var.s3_bucket_name}/data/silver/citibike/"
+    "--gold_path"     = "s3://${var.s3_bucket_name}/data/gold/citibike/"
+    "--database_name" = aws_glue_catalog_database.citibike_db.name
+
+    # 🔥 REQUIRED ARGUMENTS
+    "--BUCKET" = var.s3_bucket_name
+    "--YEAR"   = "2025"
   }
 }
+
 
 # Crawlers
 resource "aws_glue_crawler" "raw_data_crawler" {
