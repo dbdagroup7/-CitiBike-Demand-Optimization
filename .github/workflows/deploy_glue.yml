@@ -26,14 +26,14 @@ jobs:
 
       - name: Validate Python syntax
         run: |
-          echo "🔍 Validating Python scripts..."
+          echo " Validating Python scripts..."
           for file in glue_jobs/*.py; do
             if [ -f "$file" ]; then
               echo "Checking $file..."
               python -m py_compile "$file"
             fi
           done
-          echo "✅ All scripts validated!"
+          echo " All scripts validated!"
 
   deploy-test:
     name: Deploy to Test Bucket
@@ -53,44 +53,45 @@ jobs:
 
       - name: Test AWS connection
         run: |
-          echo "🔐 Testing AWS credentials..."
+          echo " Testing AWS credentials..."
           echo "Current IAM user:"
           aws sts get-caller-identity
           echo ""
-          echo "✅ AWS connection successful!"
+          echo " AWS connection successful!"
 
       - name: Upload Glue scripts to S3
         run: |
           echo "======================================"
-          echo "📤 Deploying to TEST Environment"
+          echo " Deploying to TEST Environment"
           echo "======================================"
           echo "Bucket: s3://${{ env.S3_BUCKET_TEST }}/glue_scripts/"
           echo "User: CI/CD User"
           echo "======================================"
           
           aws s3 sync glue_jobs/ s3://${{ env.S3_BUCKET_TEST }}/glue_scripts/ \
+            --delete \
             --exclude "*.pyc" \
             --exclude "__pycache__/*" \
             --exclude "*.md"
           
           echo ""
-          echo "✅ Upload complete!"
+          echo " Upload complete!"
 
       - name: Verify upload
         run: |
           echo ""
-          echo "📋 Files now in S3:"
+          echo " Files now in S3:"
           aws s3 ls s3://${{ env.S3_BUCKET_TEST }}/glue_scripts/ --recursive --human-readable
           echo ""
 
       - name: Deployment summary
         run: |
           echo "======================================"
-          echo "🎯 Deployment Summary"
+          echo " Deployment Summary"
           echo "======================================"
           echo "Environment: TEST"
           echo "Bucket: ${{ env.S3_BUCKET_TEST }}"
           echo "Branch: ${{ github.ref_name }}"
           echo "Commit: ${{ github.sha }}"
           echo "======================================"
-          echo "✅ SUCCESS!"
+          echo " SUCCESS!"
