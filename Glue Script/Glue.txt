@@ -1,0 +1,257 @@
+import sys
+import os
+import zipfile
+import boto3
+import shutil
+from datetime import datetime
+
+from awsglue.utils import getResolvedOptions
+from awsglue.context import GlueContext
+from awsglue.job import Job
+from pyspark.context import SparkContext
+
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+# ----------------------------------------------------
+# Glue Init
+# ----------------------------------------------------
+args = getResolvedOptions(sys.argv, ['JOB_NAME'])
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args['JOB_NAME'], args)
+
+spark.conf.set("spark.sql.shuffle.partitions", "200")
+
+# ----------------------------------------------------
+# S3 Paths (EDIT THESE)
+# ----------------------------------------------------
+BUCKET = "my-bucket"
+
+ZIP_INPUT_PATH      = f"s3://{BUCKET}/original/"
+MONTHLY_PARQUET     = f"s3://{BUCKET}/monthly_parquet/"
+WEATHER_CSV_PATH    = f"s3://{BUCKET}/weather_data/2024_weather.csv"
+FINAL_OUTPUT_PATH   = f"s3://{BUCKET}/final/citibike_model_ready/"
+
+LOCAL_TMP = "/tmp/citibike"
+
+os.makedirs(LOCAL_TMP, exist_ok=True)
+s3 = boto3.client("s3")
+
+# ----------------------------------------------------
+# Helper: List ZIP files
+# ----------------------------------------------------
+def list_zip_files():
+    paginator = s3.get_paginator("list_objects_v2")
+    pages = paginator.paginate(Bucket=BUCKET, Prefix="original/")
+    zips = []
+    for page in pages:
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".zip"):
+                zips.append(obj["Key"])
+    return sorted(zips)
+
+# ----------------------------------------------------
+# Helper: Download ZIP
+# ----------------------------------------------------
+def download_zip(s3_key):
+    local_path = os.path.join(LOCAL_TMP, os.path.basename(s3_key))
+    s3.download_file(BUCKET, s3_key, local_path)
+    return local_path
+
+# ----------------------------------------------------
+# STEP 1 — Process each ZIP → Monthly Parquet
+# ----------------------------------------------------
+zip_files = list_zip_files()
+print(f"Found {len(zip_files)} ZIP files")
+
+for zip_key in zip_files:
+
+    print(f"\nProcessing ZIP: {zip_key}")
+    zip_local = download_zip(zip_key)
+
+    month_name = os.path.basename(zip_key).replace(".zip", "")
+    extract_dir = os.path.join(LOCAL_TMP, month_name)
+    os.makedirs(extract_dir, exist_ok=True)
+
+    # Extract ZIP
+    with zipfile.ZipFile(zip_local, 'r') as zip_ref:
+        zip_ref.extractall(extract_dir)
+
+    # Read all CSVs inside ZIP
+    csv_files = [
+        os.path.join(extract_dir, f)
+        for f in os.listdir(extract_dir)
+        if f.endswith(".csv")
+    ]
+
+    if not csv_files:
+        print(f"No CSV found in {zip_key}, skipping.")
+        continue
+
+    df_month = None
+
+    for csv_path in csv_files:
+        df = spark.read.option("header", "true").csv(csv_path)
+
+        if df_month is None:
+            df_month = df
+        else:
+            df_month = df_month.unionByName(df)
+
+    # ------------------------
+    # Basic Type Casting
+    # ------------------------
+    df_month = df_month \
+        .withColumn("started_at", to_timestamp("started_at")) \
+        .withColumn("ended_at", to_timestamp("ended_at")) \
+        .withColumn("start_lat", col("start_lat").cast(DoubleType())) \
+        .withColumn("start_lng", col("start_lng").cast(DoubleType())) \
+        .withColumn("end_lat", col("end_lat").cast(DoubleType())) \
+        .withColumn("end_lng", col("end_lng").cast(DoubleType())) \
+        .withColumn("trip_date", to_date("started_at"))
+
+    # Write monthly parquet
+    monthly_path = f"{MONTHLY_PARQUET}/{month_name}/"
+    df_month.write.mode("overwrite").parquet(monthly_path)
+    print(f"Written monthly parquet → {monthly_path}")
+
+    # Cleanup temp
+    shutil.rmtree(extract_dir, ignore_errors=True)
+    os.remove(zip_local)
+
+# ----------------------------------------------------
+# STEP 2 — Load Weather Data
+# ----------------------------------------------------
+print("\nLoading weather data...")
+weather_df = spark.read.option("header", "true").csv(WEATHER_CSV_PATH)
+
+weather_df = weather_df \
+    .withColumnRenamed("DATE", "trip_date") \
+    .withColumn("trip_date", to_date("trip_date"))
+
+# Cast weather numeric columns
+weather_double_cols = [
+    "TEMP","DEWP","SLP","STP","VISIB","WDSP",
+    "MXSPD","GUST","MAX","MIN","PRCP","SNDP"
+]
+
+for c in weather_double_cols:
+    weather_df = weather_df.withColumn(c, col(c).cast(DoubleType()))
+
+# Decode FRSHTT
+weather_df = weather_df \
+    .withColumn("is_fog",      substring("FRSHTT",1,1).cast("int")) \
+    .withColumn("is_rain",     substring("FRSHTT",2,1).cast("int")) \
+    .withColumn("is_snow",     substring("FRSHTT",3,1).cast("int")) \
+    .withColumn("is_hail",     substring("FRSHTT",4,1).cast("int")) \
+    .withColumn("is_thunder",  substring("FRSHTT",5,1).cast("int")) \
+    .withColumn("is_tornado",  substring("FRSHTT",6,1).cast("int")) \
+    .drop("FRSHTT")
+
+# Drop unused columns
+drop_cols = [c for c in weather_df.columns if c.endswith("_ATTRIBUTES")] + \
+            ["STATION","LATITUDE","LONGITUDE","ELEVATION","NAME"]
+
+weather_df = weather_df.drop(*drop_cols).cache()
+
+# ----------------------------------------------------
+# STEP 3 — Load All Monthly Parquet
+# ----------------------------------------------------
+print("\nLoading monthly parquet data...")
+citibike_df = spark.read.parquet(MONTHLY_PARQUET)
+
+# ----------------------------------------------------
+# STEP 4 — Join
+# ----------------------------------------------------
+joined_df = citibike_df.join(
+    weather_df,
+    on="trip_date",
+    how="left"
+)
+
+# ----------------------------------------------------
+# STEP 5 — Transformations
+# ----------------------------------------------------
+
+# Remove invalid stations
+joined_df = joined_df.filter(
+    col("start_station_id").isNotNull() &
+    col("end_station_id").isNotNull() &
+    (length("start_station_id") > 0) &
+    (length("end_station_id") > 0)
+)
+
+# Trip duration
+joined_df = joined_df.withColumn(
+    "trip_duration_min",
+    (unix_timestamp("ended_at") - unix_timestamp("started_at")) / 60
+)
+
+joined_df = joined_df.filter(
+    (col("trip_duration_min") > 1) &
+    (col("trip_duration_min") < 1440)
+)
+
+# Coordinate bounds (NYC)
+joined_df = joined_df.filter(
+    col("start_lat").between(40.0, 41.0) &
+    col("end_lat").between(40.0, 41.0) &
+    col("start_lng").between(-74.0, -73.4) &
+    col("end_lng").between(-74.0, -73.4)
+)
+
+# Replace SNDP sentinel
+joined_df = joined_df.withColumn(
+    "SNDP",
+    when(col("SNDP") == 999.9, 0).otherwise(col("SNDP"))
+)
+
+# Weekend flag
+joined_df = joined_df.withColumn(
+    "weekend",
+    dayofweek("trip_date").isin([1,7])
+)
+
+# Season
+joined_df = joined_df.withColumn(
+    "season",
+    when(month("trip_date").isin([12,1,2]), "winter")
+    .when(month("trip_date").isin([3,4,5]), "spring")
+    .when(month("trip_date").isin([6,7,8]), "summer")
+    .otherwise("fall")
+)
+
+# Haversine distance (miles)
+R = 3958.8
+
+joined_df = joined_df.withColumn(
+    "trip_distance",
+    R * acos(
+        cos(radians("start_lat")) * cos(radians("end_lat")) *
+        cos(radians("end_lng") - radians("start_lng")) +
+        sin(radians("start_lat")) * sin(radians("end_lat"))
+    )
+)
+
+joined_df = joined_df.withColumn("trip_distance", round(col("trip_distance"), 2))
+
+# Column normalization
+final_df = joined_df.select([
+    col(c).alias(c.lower()) for c in joined_df.columns
+])
+
+# ----------------------------------------------------
+# STEP 6 — Write Final Output
+# ----------------------------------------------------
+final_df.write \
+    .mode("overwrite") \
+    .partitionBy("season") \
+    .parquet(FINAL_OUTPUT_PATH)
+
+print("Final dataset written successfully.")
+
+# ----------------------------------------------------
+job.commit()
