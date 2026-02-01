@@ -67,7 +67,11 @@ This project uses two datasets to analyze CitiBike demand and its dependency on 
 
 Based on the initial exploratory analysis, the following observations were made:
 
-### Dataset Size & Structure
+### Raw Dataset Size 
+  **Raw Citibike_2025 Data Size(CSV):** 5.38 GBs
+  **Raw Weather_2025 Data Size:** 57 KBs
+
+### Merged Dataset Size(Parquet) 
 - **Total Records:** 29.48 Million ride records  
 - **Total Columns:** 41 columns after merging CitiBike and weather datasets  
 - **File Size:** 1.65 GBs, confirming large-scale historical data  
