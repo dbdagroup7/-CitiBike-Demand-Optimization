@@ -35,9 +35,9 @@ print(f"[JOB-3] Starting GOLD aggregation job for year={YEAR}")
 # S3 Paths (UPDATED – Job 2)
 # ==========================================================
 
-SILVER_PATH = f"s3://{BUCKET}/data/silver/citibike/{YEAR}/"
+SILVER_PATH = f"s3://{BUCKET}/data/silver/{YEAR}/"
 
-GOLD_BASE = f"s3://{BUCKET}/data/gold/citibike/{YEAR}"
+GOLD_BASE = f"s3://{BUCKET}/data/gold/{YEAR}"
 
 DIM_CALENDAR_PATH = f"{GOLD_BASE}/dim_calendar/"
 
