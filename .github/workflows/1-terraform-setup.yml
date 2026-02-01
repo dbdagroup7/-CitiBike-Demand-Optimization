@@ -1,0 +1,68 @@
+name: 1 - Setup Infrastructure (Terraform)
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  setup:
+    name: Create AWS Infrastructure
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_ADMIN }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_ADMIN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create Lambda placeholder
+        working-directory: terraform
+        run: |
+          echo 'def lambda_handler(event, context):' > lambda_function.py
+          echo '    print("Placeholder function")' >> lambda_function.py
+          echo '    return {"statusCode": 200}' >> lambda_function.py
+          zip lambda_placeholder.zip lambda_function.py
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: terraform plan
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: terraform apply -auto-approve
+
+      - name: Show Outputs (SAVE THESE!)
+        working-directory: terraform
+        run: |
+          echo "======================================"
+          echo "INFRASTRUCTURE CREATED!"
+          echo "======================================"
+          echo ""
+          echo "📋 COPY THESE VALUES TO GITHUB SECRETS:"
+          echo "======================================"
+          echo "Secret Name: AWS_ACCESS_KEY_ID"
+          echo "Value: $(terraform output -raw cicd_access_key_id)"
+          echo ""
+          echo "Secret Name: AWS_SECRET_ACCESS_KEY"
+          echo "Value: $(terraform output -raw cicd_secret_access_key)"
+          echo ""
+          echo "======================================"
+          echo "S3 Bucket: $(terraform output -raw s3_bucket_name)"
+          echo "Glue Job: $(terraform output -raw glue_job1_name)"
+          echo "======================================"
