@@ -46,7 +46,7 @@ resource "aws_glue_job" "job2_silver_to_gold" {
   }
 
   glue_version      = "4.0"
-  number_of_workers = 8
+  number_of_workers = 4
   worker_type       = "G.1X"
   timeout           = 60
 
@@ -66,7 +66,6 @@ resource "aws_glue_job" "job2_silver_to_gold" {
     "--YEAR"   = "2025"
   }
 }
-
 
 # Crawlers
 resource "aws_glue_crawler" "raw_data_crawler" {
