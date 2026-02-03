@@ -52,6 +52,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Resolve S3 bucket
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.S3_BUCKET }}" ]; then
+            echo "S3_BUCKET=${{ secrets.S3_BUCKET }}" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if [ -n "${{ vars.S3_BUCKET }}" ]; then
+            echo "S3_BUCKET=${{ vars.S3_BUCKET }}" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          S3_BUCKET=$(awk -F'"' '/^s3_bucket_name[[:space:]]*=/ {print $2}' "terraform/env/${{ matrix.env }}.tfvars")
+          if [ -z "$S3_BUCKET" ]; then
+            echo "S3 bucket is not set. Define secrets.S3_BUCKET or vars.S3_BUCKET, or add s3_bucket_name in terraform/env/${{ matrix.env }}.tfvars."
+            exit 1
+          fi
+          echo "S3_BUCKET=$S3_BUCKET" >> "$GITHUB_ENV"
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -66,7 +84,7 @@ jobs:
         run: |
           echo "Deploying to: ${{ matrix.env }}"
           aws s3 sync glue_jobs/ \
-            s3://${{ secrets.S3_BUCKET }}/glue_scripts/${{ github.sha }}/ \
+            s3://${{ env.S3_BUCKET }}/glue_scripts/${{ github.sha }}/ \
             --exclude "*.pyc" \
             --exclude "__pycache__/*" \
             --exclude "*.md"
@@ -74,20 +92,20 @@ jobs:
       - name: Update latest pointer
         run: |
           aws s3 sync \
-            s3://${{ secrets.S3_BUCKET }}/glue_scripts/${{ github.sha }}/ \
-            s3://${{ secrets.S3_BUCKET }}/glue_scripts/latest/ \
+            s3://${{ env.S3_BUCKET }}/glue_scripts/${{ github.sha }}/ \
+            s3://${{ env.S3_BUCKET }}/glue_scripts/latest/ \
             --delete
 
       - name: Verify deployment
         run: |
           aws s3 ls \
-            s3://${{ secrets.S3_BUCKET }}/glue_scripts/latest/ \
+            s3://${{ env.S3_BUCKET }}/glue_scripts/latest/ \
             --recursive --human-readable
 
       - name: Deployment summary
         run: |
           echo "Deployment successful"
           echo "Environment : ${{ matrix.env }}"
-          echo "Bucket      : ${{ secrets.S3_BUCKET }}"
+          echo "Bucket      : ${{ env.S3_BUCKET }}"
           echo "Branch      : ${{ github.ref_name }}"
           echo "Commit      : ${{ github.sha }}"
