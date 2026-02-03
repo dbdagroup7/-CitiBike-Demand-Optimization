@@ -311,11 +311,11 @@ Terraform and CI/CD together enable a fully automated, reproducible, and product
   <b>Figure:</b> Star-Schema Based Data Model
 </p>
 
-### ⭐ Why We Used a Star Schema ?
+### Why We Used a Star Schema ?
 - We designed our data model using a star schema because it provides the best balance between performance, scalability, and   analytical clarity for large, time-series data like CitiBike trips. With a single central fact table and clearly defined dimension tables, star schema ensures fast query performance, accurate aggregations, and simple, intuitive analysis in Power BI.
 
-🧠 The Real Reasoning:
-### 1️⃣ Our Data Is Analytical, Not Transactional
+The Real Reasoning:
+### 1.Our Data Is Analytical, Not Transactional
 
 - “Our use case is analytics and decision-making, not transactional updates.”
 
@@ -326,10 +326,9 @@ Terraform and CI/CD together enable a fully automated, reproducible, and product
   - User behavior
 
 - Not inserting/updating individual records
+- Star schema is purpose-built for analytics (OLAP).
 
-- 📌 Star schema is purpose-built for analytics (OLAP).
-
-### 2️⃣ Central Fact, Multiple Dimensions Fit Our Problem Perfectly
+### 2.Central Fact, Multiple Dimensions Fit Our Problem Perfectly
 - Our model naturally fits:
   - Fact table → fact_trips
   - Measures: trips, duration, rush hour, stress
@@ -341,7 +340,7 @@ Terraform and CI/CD together enable a fully automated, reproducible, and product
       - Temperature
 It is not forced design — it’s natural design.
 
-### 3️⃣ Performance Was a Major Driver
+### 3.Performance Was a Major Driver
 - We are working with large datasets coming from s3, so query performance was critical.
 - Star schema helps because:
    - Fewer joins
@@ -349,12 +348,12 @@ It is not forced design — it’s natural design.
    - Efficient columnar compression (VertiPaq)
 
 Faster DAX evaluation
-- 📌 This directly solved:
+- This directly solved:
    - Slow visuals
    - Long refresh times
    - Aggregation delays
 
-### 4️⃣ Avoided Complex Relationships and Ambiguity
+### 4.Avoided Complex Relationships and Ambiguity
 - Star schema eliminates many-to-many relationships and ambiguous filter paths.
 - Why this matters:
   - Accurate totals
@@ -362,7 +361,7 @@ Faster DAX evaluation
   - Predictable filter behavior
   - Cleaner DAX
 
-### 6️⃣ Simpler for Visualization & Collaboration
+### 5.Simpler for Visualization & Collaboration
 - Star schema makes the model easier to understand and use, especially for visualization teams.
 - Benefits:
   - Clear fields
