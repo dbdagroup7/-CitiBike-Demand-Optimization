@@ -300,3 +300,74 @@ Compares weekday and weekend usage.
 - Triggered pipelines on code updates  
 
 Terraform and CI/CD together enable a fully automated, reproducible, and production-ready data engineering workflow.
+
+---
+## 9. Why Star Schema Pattern?
+
+<p align="center">
+  <img src="images/datamodel.jpeg" width="850"/>
+</p>
+<p align="center">
+  <b>Figure:</b> Star-Schema Based Data Model
+</p>
+
+### Why We Used a Star Schema ?
+- We designed our data model using a star schema because it provides the best balance between performance, scalability, and   analytical clarity for large, time-series data like CitiBike trips. With a single central fact table and clearly defined dimension tables, star schema ensures fast query performance, accurate aggregations, and simple, intuitive analysis in Power BI.
+
+The Real Reasoning:
+### 1.Our Data Is Analytical, Not Transactional
+
+- “Our use case is analytics and decision-making, not transactional updates.”
+
+- We are analyzing:
+  - Trip counts
+  - Usage patterns
+  - Weather impact
+  - User behavior
+
+- Not inserting/updating individual records
+- Star schema is purpose-built for analytics (OLAP).
+
+### 2.Central Fact, Multiple Dimensions Fit Our Problem Perfectly
+- Our model naturally fits:
+  - Fact table → fact_trips
+  - Measures: trips, duration, rush hour, stress
+  - Dimensions:
+      - Date
+      - Station
+      - Member type
+      - Bike type
+      - Temperature
+It is not forced design — it’s natural design.
+
+### 3.Performance Was a Major Driver
+- We are working with large datasets coming from s3, so query performance was critical.
+- Star schema helps because:
+   - Fewer joins
+   - Simple joins (dimension → fact)
+   - Efficient columnar compression (VertiPaq)
+
+Faster DAX evaluation
+- This directly solved:
+   - Slow visuals
+   - Long refresh times
+   - Aggregation delays
+
+### 4.Avoided Complex Relationships and Ambiguity
+- Star schema eliminates many-to-many relationships and ambiguous filter paths.
+- Why this matters:
+  - Accurate totals
+  - No double counting
+  - Predictable filter behavior
+  - Cleaner DAX
+
+### 5.Simpler for Visualization & Collaboration
+- Star schema makes the model easier to understand and use, especially for visualization teams.
+- Benefits:
+  - Clear fields
+  - No confusing joins
+  - Faster development
+  - Lower error rate
+
+---
+
