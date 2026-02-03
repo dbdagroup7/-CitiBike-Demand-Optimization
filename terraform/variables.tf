@@ -39,3 +39,13 @@ variable "alert_email" {
   type        = string
   default     = ""
 }
+
+variable "github_org" {
+  description = "GitHub organization or user that owns the repo"
+  type        = string
+}
+
+variable "github_repo" {
+  description = "GitHub repository name"
+  type        = string
+}

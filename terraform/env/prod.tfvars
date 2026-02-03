@@ -5,3 +5,5 @@ s3_bucket_name = "citibike-prod-bucket"
 glue_max_retries = 1
 glue_max_concurrent_runs = 1
 alert_email = ""
+github_org = "dbdagroup7"
+github_repo = "-CitiBike-Demand-Optimization"

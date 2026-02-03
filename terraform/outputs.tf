@@ -20,3 +20,13 @@ output "silver_data_path" {
 output "gold_data_path" {
   value = "s3://${var.s3_bucket_name}/data/gold/citibike/"
 }
+
+output "github_deploy_glue_role_arn" {
+  description = "IAM role ARN for GitHub Actions to deploy Glue scripts"
+  value       = aws_iam_role.github_deploy_glue.arn
+}
+
+output "github_terraform_role_arn" {
+  description = "IAM role ARN for GitHub Actions to run Terraform"
+  value       = aws_iam_role.github_terraform.arn
+}

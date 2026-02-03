@@ -7,11 +7,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write
   contents: read
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION || 'eu-north-1' }}
+  AWS_REGION: ${{ secrets.AWS_REGION || 'eu-north-1' }}
 
 jobs:
   validate:
@@ -29,22 +28,24 @@ jobs:
 
       - name: Validate Python syntax
         run: |
-          echo " Validating Python scripts..."
+          echo "Validating Python scripts..."
           for file in glue_jobs/*.py; do
             if [ -f "$file" ]; then
-              echo "Checking $file..."
+              echo "Checking $file"
               python -m py_compile "$file"
             fi
           done
-          echo " All scripts validated!"
+          echo "All scripts validated!"
 
   deploy:
     name: Deploy Glue Scripts
     needs: validate
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
         env: [dev, test, prod]
+
     environment: ${{ matrix.env }}
 
     steps:
@@ -54,52 +55,39 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Test AWS connection
-        run: |
-          echo " Testing AWS credentials..."
-          aws sts get-caller-identity
-          echo " AWS connection successful!"
+      - name: Verify AWS access
+        run: aws sts get-caller-identity
 
-      - name: Upload Glue scripts to versioned path
+      - name: Upload Glue scripts (versioned)
         run: |
-          echo "======================================"
-          echo " Deploying to ${{ matrix.env }} Environment"
-          echo "======================================"
-          echo "Bucket: s3://${{ vars.S3_BUCKET }}/glue_scripts/${{ github.sha }}/"
-          echo "======================================"
-
-          aws s3 sync glue_jobs/ s3://${{ vars.S3_BUCKET }}/glue_scripts/${{ github.sha }}/ \
+          echo "Deploying to: ${{ matrix.env }}"
+          aws s3 sync glue_jobs/ \
+            s3://${{ secrets.S3_BUCKET }}/glue_scripts/${{ github.sha }}/ \
             --exclude "*.pyc" \
             --exclude "__pycache__/*" \
             --exclude "*.md"
 
-          echo ""
-          echo " Upload complete!"
-
       - name: Update latest pointer
         run: |
-          aws s3 sync s3://${{ vars.S3_BUCKET }}/glue_scripts/${{ github.sha }}/ \
-            s3://${{ vars.S3_BUCKET }}/glue_scripts/latest/ \
+          aws s3 sync \
+            s3://${{ secrets.S3_BUCKET }}/glue_scripts/${{ github.sha }}/ \
+            s3://${{ secrets.S3_BUCKET }}/glue_scripts/latest/ \
             --delete
 
-      - name: Verify upload
+      - name: Verify deployment
         run: |
-          echo ""
-          echo " Files now in S3:"
-          aws s3 ls s3://${{ vars.S3_BUCKET }}/glue_scripts/latest/ --recursive --human-readable
-          echo ""
+          aws s3 ls \
+            s3://${{ secrets.S3_BUCKET }}/glue_scripts/latest/ \
+            --recursive --human-readable
 
       - name: Deployment summary
         run: |
-          echo "======================================"
-          echo " Deployment Summary"
-          echo "======================================"
-          echo "Environment: ${{ matrix.env }}"
-          echo "Bucket: ${{ vars.S3_BUCKET }}"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
-          echo "======================================"
-          echo " SUCCESS!"
+          echo "Deployment successful"
+          echo "Environment : ${{ matrix.env }}"
+          echo "Bucket      : ${{ secrets.S3_BUCKET }}"
+          echo "Branch      : ${{ github.ref_name }}"
+          echo "Commit      : ${{ github.sha }}"
