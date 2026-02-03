@@ -80,6 +80,11 @@ jobs:
       - name: Verify AWS access
         run: aws sts get-caller-identity
 
+      - name: Preflight S3 bucket
+        run: |
+          echo "Resolved S3 bucket: ${{ env.S3_BUCKET }}"
+          aws s3api head-bucket --bucket "${{ env.S3_BUCKET }}"
+
       - name: Upload Glue scripts (versioned)
         run: |
           echo "Deploying to: ${{ matrix.env }}"
