@@ -10,13 +10,18 @@ resource "aws_glue_job" "job1_bronze_to_silver" {
   command {
     name            = "glueetl"
     python_version  = "3"
-    script_location = "s3://${var.s3_bucket_name}/glue_scripts/raw_to_silver.py"
+    script_location = "s3://${var.s3_bucket_name}/glue_scripts/latest/raw_to_silver.py"
   }
 
   glue_version      = "4.0"
   number_of_workers = 4
   worker_type       = "G.1X"
   timeout           = 60
+  max_retries       = var.glue_max_retries
+
+  execution_property {
+    max_concurrent_runs = var.glue_max_concurrent_runs
+  }
 
   default_arguments = {
     "--job-bookmark-option"              = "job-bookmark-enable"
@@ -42,13 +47,18 @@ resource "aws_glue_job" "job2_silver_to_gold" {
   command {
     name            = "glueetl"
     python_version  = "3"
-    script_location = "s3://${var.s3_bucket_name}/glue_scripts/silver_to_gold.py"
+    script_location = "s3://${var.s3_bucket_name}/glue_scripts/latest/silver_to_gold.py"
   }
 
   glue_version      = "4.0"
   number_of_workers = 4
   worker_type       = "G.1X"
   timeout           = 60
+  max_retries       = var.glue_max_retries
+
+  execution_property {
+    max_concurrent_runs = var.glue_max_concurrent_runs
+  }
 
   default_arguments = {
     "--job-bookmark-option"              = "job-bookmark-enable"

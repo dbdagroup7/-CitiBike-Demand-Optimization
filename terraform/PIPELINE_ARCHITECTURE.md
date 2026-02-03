@@ -303,11 +303,11 @@ terraform output
 ```bash
 # Upload Job 1 script
 aws s3 cp glue_jobs/Merge_Cleaning_And_Transformation\(Silver\).py \
-  s3://<bucket>/glue_scripts/job1_bronze_to_silver.py
+  s3://<bucket>/glue_scripts/latest/job1_bronze_to_silver.py
 
 # Upload Job 2 script
 aws s3 cp glue_jobs/gold_transformation.py \
-  s3://<bucket>/glue_scripts/job2_silver_to_gold.py
+  s3://<bucket>/glue_scripts/latest/job2_silver_to_gold.py
 ```
 
 ## Testing the Pipeline

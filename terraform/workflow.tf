@@ -16,7 +16,7 @@ resource "aws_glue_workflow" "citibike_etl" {
 ########################################
 resource "aws_cloudwatch_event_rule" "s3_upload_trigger" {
   name        = "${var.project_name}-${var.environment}-s3-upload-trigger"
-  description = "Trigger Glue workflow on raw CitiBike upload"
+  description = "Trigger Glue workflow on raw CitiBike ready marker"
 
   event_pattern = jsonencode({
     source        = ["aws.s3"]
@@ -27,7 +27,7 @@ resource "aws_cloudwatch_event_rule" "s3_upload_trigger" {
       }
       object = {
         key = [{
-          prefix = "data/raw/citibike/"
+          prefix = "data/raw/citibike/_READY"
         }]
       }
     }
@@ -111,7 +111,7 @@ resource "aws_glue_trigger" "job1_to_gold_crawler" {
 
   predicate {
     conditions {
-      job_name = aws_glue_job.job1_bronze_to_silver.name
+      job_name = aws_glue_job.job2_silver_to_gold.name
       state    = "SUCCEEDED"
     }
   }
