@@ -21,16 +21,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      - name: Wait for Terraform workflow to finish (if running)
-        uses: lewagon/wait-on-check-action@v1.3.1
-        continue-on-error: true 
-        with:
-          ref: ${{ github.ref }}
-          check-name: Deploy Terraform Infrastructure 
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 30
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
