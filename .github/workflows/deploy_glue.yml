@@ -8,21 +8,20 @@ on:
       - glue_scripts/**
   workflow_dispatch:
 
-# ------------------------------------------------------------
 permissions:
   contents: read
   checks: read
-# ------------------------------------------------------------
+
 jobs:
   deploy-glue-scripts:
     runs-on: ubuntu-latest
 
     steps:
-      # ------------------------------------------------------------
+ 
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ------------------------------------------------------------
+
       - name: Wait for Terraform workflow to finish (if running)
         uses: lewagon/wait-on-check-action@v1.3.1
         with:
@@ -31,31 +30,26 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 30
 
-      # ------------------------------------------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.9"
 
-      # ------------------------------------------------------------
       - name: Validate Glue scripts (syntax check)
         run: |
           python -m py_compile glue_scripts/*.py
 
-      # ------------------------------------------------------------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-north-1
+          aws-region: us-east-1
 
-      # ------------------------------------------------------------
       - name: Sync Glue scripts to S3
         run: |
           aws s3 sync ./glue_scripts s3://${{ secrets.S3_BUCKET_NAME }}/glue_scripts/ --delete
 
-      # ------------------------------------------------------------
       - name: Trigger Glue Workflow
         if: success()
         run: |
