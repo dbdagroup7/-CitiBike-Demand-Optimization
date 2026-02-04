@@ -1,6 +1,7 @@
 name: Deploy Glue Scripts to S3
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - Develop
