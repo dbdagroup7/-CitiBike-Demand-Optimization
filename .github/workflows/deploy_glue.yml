@@ -1,21 +1,20 @@
 name: Deploy Glue Scripts to S3
 
-
 on:
   push:
     branches:
       - Develop
     paths:
-      - 'glue_scripts/**' 
+      - 'glue_scripts/**'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -23,4 +22,4 @@ jobs:
 
     - name: Sync Scripts to S3
       run: |
-        aws s3 sync ./glue_scripts s3://citibike-data-lake-group7/glue_scripts/ --delete
+        aws s3 sync ./glue_scripts s3://${{ secrets.S3_BUCKET_NAME }}/glue_scripts/ --delete
