@@ -3,7 +3,10 @@ module "s3" {
   source      = "../../modules/s3"
   bucket_name = var.project_bucket_name # <--- This tells it to look at terraform.tfvars
 }
-
+import {
+  to = module.s3.aws_s3_bucket.datalake
+  id = "citibike-data-lake-group7"
+}
 # 2. IAM
 module "iam" {
   source      = "../../modules/iam"
