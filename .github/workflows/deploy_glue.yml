@@ -22,4 +22,4 @@ jobs:
 
     - name: Sync Scripts to S3
       run: |
-        aws s3 sync ./glue_scripts s3://citibike-data-pipeline-unique-123/glue_scripts/ --delete
+        aws s3 sync ./glue_scripts s3://citibike-data-lake-group7/glue_scripts/ --delete
