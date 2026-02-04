@@ -14,10 +14,10 @@ module "iam" {
 }
 
 # 3. EC2 (For Ingestion)
-module "ec2" {
-  source               = "../../modules/ec2"
-  iam_instance_profile = module.iam.ec2_profile_name
-}
+#module "ec2" {
+#  source               = "../../modules/ec2"
+#  iam_instance_profile = module.iam.ec2_profile_name
+#}
 
 # 4. Athena
 module "athena" {
