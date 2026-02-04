@@ -30,7 +30,7 @@ job.init(args['JOB_NAME'], args)
 # ==========================================================
 CITIBIKE_RAW = f"s3://{BUCKET}/data/raw/citibike/{YEAR}/"
 WEATHER_RAW  = f"s3://{BUCKET}/data/raw/weather/{YEAR}_weather.csv"
-SILVER_OUT   = f"s3://{BUCKET}/data/silver_new/{YEAR}/"
+SILVER_OUT   = f"s3://{BUCKET}/data/silver/{YEAR}/"
 
 # ==========================================================
 # Read CitiBike
