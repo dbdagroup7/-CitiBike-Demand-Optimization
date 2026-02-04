@@ -40,7 +40,7 @@ resource "aws_glue_job" "job1" {
     "--spark-event-logs-path"            = "s3://${var.bucket_name}/spark-logs/"
     
     # Pass bucket as parameter for script reusability
-    "--BUCKET_NAME" = var.bucket_name
+    "--BUCKET" = var.bucket_name
   }
   
   tags = {
@@ -69,7 +69,8 @@ resource "aws_glue_job" "job2" {
     "--job-bookmark-option"              = "job-bookmark-enable"
     "--enable-continuous-cloudwatch-log" = "true"
     "--enable-metrics"                   = "true"
-    "--BUCKET_NAME"                      = var.bucket_name
+    "--BUCKET"                           = var.bucket_name
+    "--YEAR"                             = "2024"
   }
   
   tags = {
@@ -91,11 +92,11 @@ resource "aws_glue_crawler" "gold_crawler" {
   
   # Target both dimensions and facts
   s3_target {
-    path = "s3://${var.bucket_name}/gold/dimensions/"
+    path = "s3://${var.bucket_name}/data/gold/dimensions/"
   }
   
   s3_target {
-    path = "s3://${var.bucket_name}/gold/fact/"
+    path = "s3://${var.bucket_name}/data/gold/facts/"
   }
   
   # Schema change handling
