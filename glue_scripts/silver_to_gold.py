@@ -31,7 +31,7 @@ print(f"[GOLD JOB] Starting for YEAR={YEAR}")
 # ==========================================================
 # Paths
 # ==========================================================
-SILVER_IN = f"s3://{BUCKET}/data/silver_new/{YEAR}/"
+SILVER_IN = f"s3://{BUCKET}/data/silver/{YEAR}/"
 GOLD_FACT = f"s3://{BUCKET}/data/gold/facts/"
 GOLD_DIM  = f"s3://{BUCKET}/data/gold/dimensions/"
 
