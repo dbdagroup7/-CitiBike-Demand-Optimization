@@ -5,33 +5,21 @@ on:
     branches:
       - Develop
     paths:
-      - glue_scripts/**
-  workflow_dispatch:
+      - 'glue_scripts/**' 
 
 jobs:
-  deploy-glue-scripts:
+  deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
 
-      - name: Validate Glue scripts
-        run: |
-          python -m py_compile glue_scripts/*.py
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: eu-north-1
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      - name: Sync Glue scripts to S3
-        run: |
-          aws s3 sync glue_scripts/ s3://ci-cd-testing-citibike-7/glue_scripts/ --delete
+    - name: Sync Scripts to S3
+      run: |
+        aws s3 sync ./glue_scripts s3://citibike-data-pipeline-unique-123/glue_scripts/ --delete

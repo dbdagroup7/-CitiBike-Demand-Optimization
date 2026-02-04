@@ -1,8 +1,8 @@
 terraform {
   backend "s3" {
-    bucket         = "ci-cd-testing-citibike-7"
+    bucket         = "citibike-data-lake-group7"
     key            = "terraform/state/dev.tfstate"
-    region         = "eu-north-1"
+    region         = "us-east-1"
     dynamodb_table = null
   }
 }

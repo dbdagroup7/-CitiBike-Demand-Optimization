@@ -1,258 +1,235 @@
 import sys
+from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
-from awsglue.utils import getResolvedOptions
 from awsglue.job import Job
-from pyspark.sql import functions as F
+from pyspark.sql.functions import *
+from pyspark.sql.window import Window
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType
 
 # ==========================================================
 # Job Arguments
 # ==========================================================
-args = getResolvedOptions(sys.argv, [
-    'JOB_NAME',
-    'BUCKET',
-    'YEAR'
-])
-
-BUCKET = args['BUCKET']
-YEAR   = args['YEAR']
+args = getResolvedOptions(sys.argv, ['JOB_NAME', 'BUCKET', 'YEAR'])
+BUCKET = args['BUCKET'].replace("s3://", "").strip("/")
+YEAR = args['YEAR']
 
 # ==========================================================
-# Spark Init
+# Spark / Glue Init
 # ==========================================================
 sc = SparkContext()
 glueContext = GlueContext(sc)
 spark = glueContext.spark_session
-
 spark.conf.set("spark.sql.shuffle.partitions", "80")
+spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
 
 job = Job(glueContext)
 job.init(args['JOB_NAME'], args)
 
-print(f"[JOB-3] Starting GOLD aggregation job for year={YEAR}")
+print(f"[GOLD JOB] Starting for YEAR={YEAR}")
 
 # ==========================================================
-# S3 Paths (UPDATED – Job 2)
+# Paths
 # ==========================================================
-
-SILVER_PATH = f"s3://{BUCKET}/data/silver/{YEAR}/"
-
-GOLD_BASE = f"s3://{BUCKET}/data/gold/{YEAR}"
-
-DIM_CALENDAR_PATH = f"{GOLD_BASE}/dim_calendar/"
-
-KPI_PATH               = f"{GOLD_BASE}/gold_kpi_cards/"
-MEMBER_SHARE_PATH      = f"{GOLD_BASE}/gold_member_casual_share/"
-BIKE_TYPE_PATH         = f"{GOLD_BASE}/gold_trips_by_bike_type/"
-WEEKEND_USER_PATH      = f"{GOLD_BASE}/gold_weekend_weekday_user/"
-RUSH_HOUR_USER_PATH    = f"{GOLD_BASE}/gold_rush_hour_user/"
-TRIPS_BY_HOUR_PATH     = f"{GOLD_BASE}/gold_trips_by_hour/"
-TEMP_PATTERN_PATH      = f"{GOLD_BASE}/gold_trips_by_temperature/"
-TOP_STATIONS_PATH      = f"{GOLD_BASE}/gold_top_start_stations/"
-STATION_IMBALANCE_PATH = f"{GOLD_BASE}/gold_station_imbalance/"
-DAILY_AGG_PATH         = f"{GOLD_BASE}/gold_daily_aggregates/"
+SILVER_IN = f"s3://{BUCKET}/data/silver_new/{YEAR}/"
+GOLD_FACT = f"s3://{BUCKET}/data/gold/facts/"
+GOLD_DIM  = f"s3://{BUCKET}/data/gold/dimensions/"
 
 # ==========================================================
-# Read Silver Layer
+# Read Silver
 # ==========================================================
-print("[JOB-3] Reading silver dataset...")
-df = spark.read.parquet(SILVER_PATH).cache()
+df = spark.read.parquet(SILVER_IN).cache()
+total_trips = df.count()
+
+assert "temp" in df.columns, "❌ temp column missing from Silver layer"
+
+print(f"Silver records for {YEAR}: {total_trips:,}")
 
 # ==========================================================
-# Boolean → Integer Casting (FIX FOR AGGREGATIONS)
+# Create date_key ONCE (CRITICAL FIX)
 # ==========================================================
-print("[JOB-3] Casting boolean flags to integers...")
-
-df = (
-    df
-        .withColumn("weekend", F.col("weekend").cast("int"))
-        .withColumn("is_rush_hour", F.col("is_rush_hour").cast("int"))
-        .withColumn("is_holiday", F.col("is_holiday").cast("int"))
-        .withColumn("is_round_trip", F.col("is_round_trip").cast("int"))
+df = df.withColumn(
+    "date_key",
+    concat(
+        lpad(col("year"), 4, "0"),
+        lpad(col("month"), 2, "0"),
+        lpad(dayofmonth(col("trip_date")), 2, "0")
+    ).cast("int")
 )
 
 # ==========================================================
-# DIMENSION: Calendar
+# ================= DIMENSIONS ==============================
 # ==========================================================
-print("[JOB-3] Building calendar dimension...")
 
-dim_calendar = (
-    df
-      .select("trip_date", "year", "month", "weekend")
-      .dropDuplicates()
-      .withColumn("month_name", F.date_format("trip_date", "MMMM"))
-      .withColumn(
-          "day_type",
-          F.when(F.col("weekend") == 1, "Weekend").otherwise("Weekday")
-      )
+# ---------------- DIM DATE ----------------
+dim_date = df.select(
+    "date_key",
+    "trip_date",
+    "year",
+    "month",
+    "day_of_week",
+    "weekend",
+    "season"
+).dropDuplicates()
+
+dim_date.write.mode("overwrite") \
+    .partitionBy("year", "month") \
+    .parquet(GOLD_DIM + "dim_date/")
+
+# ---------------- DIM MEMBER --------------
+try:
+    existing_member = spark.read.parquet(GOLD_DIM + "dim_member/")
+    dim_member_raw = df.select("member_casual").union(
+        existing_member.select("member_casual")
+    ).dropDuplicates()
+except:
+    dim_member_raw = df.select("member_casual").dropDuplicates()
+
+window_spec = Window.orderBy("member_casual")
+dim_member = dim_member_raw.withColumn(
+    "member_key",
+    row_number().over(window_spec)
+).select("member_key", "member_casual")
+
+unknown_member = spark.createDataFrame(
+    [(-1, "Unknown")],
+    ["member_key", "member_casual"]
 )
 
-dim_calendar.write.mode("overwrite").parquet(DIM_CALENDAR_PATH)
+dim_member = dim_member.union(unknown_member)
+dim_member.write.mode("overwrite").parquet(GOLD_DIM + "dim_member/")
 
-# ==========================================================
-# KPI CARDS
-# ==========================================================
-print("[JOB-3] Generating KPI cards...")
-
-kpi_df = df.agg(
-    F.avg("trip_distance").alias("avg_distance_km"),
-    F.avg("trip_duration_min").alias("avg_trip_duration_minutes"),
-    F.expr("percentile_approx(start_hour, 0.5)").alias("peak_usage_hour"),
-    (F.sum(F.col("is_rush_hour")) / F.count("*") * 100).alias("rush_hour_usage_pct"),
-    (F.sum(F.col("weekend").cast("int")) / F.count("*") * 100).alias("weekend_demand_pct"),
-    F.avg("temp").alias("avg_temp_f"),
-    F.count("*").alias("total_trips"),
-    F.countDistinct("start_station_id").alias("unique_stations")
-)
-
-kpi_df.coalesce(1).write.mode("overwrite").parquet(KPI_PATH)
-
-# ==========================================================
-# MEMBER VS CASUAL SHARE  (FIXED)
-# ==========================================================
-
-total_trips_value = df.count()
-
-member_share = (
-    df.groupBy("member_casual")
-      .agg(F.count("*").alias("total_trips"))
-      .withColumn(
-          "trip_share_pct",
-          (F.col("total_trips") / F.lit(total_trips_value)) * 100
-      )
-)
-
-member_share.coalesce(5).write.mode("overwrite").parquet(MEMBER_SHARE_PATH)
-
-# ==========================================================
-# TRIPS BY BIKE TYPE
-# ==========================================================
-bike_type = (
-    df.groupBy("rideable_type")
-      .agg(F.count("*").alias("total_trips"))
-)
-
-bike_type.coalesce(5).write.mode("overwrite").parquet(BIKE_TYPE_PATH)
-
-# ==========================================================
-# WEEKEND VS WEEKDAY BY USER
-# ==========================================================
-weekend_user = (
-    df.groupBy("member_casual", "weekend")
-      .agg(F.count("*").alias("total_trips"))
-      .withColumn(
-          "day_type",
-          F.when(F.col("weekend") == 1, "Weekend").otherwise("Weekday")
-      )
-)
-
-weekend_user.coalesce(10).write.mode("overwrite").parquet(WEEKEND_USER_PATH)
-
-# ==========================================================
-# RUSH HOUR BY USER
-# ==========================================================
-rush_user = (
-    df.groupBy("member_casual", "is_rush_hour")
-      .agg(F.count("*").alias("total_trips"))
-      .withColumn(
-          "rush_hour_type",
-          F.when(F.col("is_rush_hour") == 1, "Rush Hour").otherwise("Non Rush")
-      )
-)
-
-rush_user.coalesce(10).write.mode("overwrite").parquet(RUSH_HOUR_USER_PATH)
-
-# ==========================================================
-# TRIPS BY HOUR
-# ==========================================================
-trips_by_hour = (
-    df.groupBy("trip_date", "start_hour")
-      .agg(
-          F.count("*").alias("total_trips"),
-          F.avg("trip_duration_min").alias("avg_duration_minutes")
-      )
-)
-
-trips_by_hour.coalesce(20).write.mode("overwrite").parquet(TRIPS_BY_HOUR_PATH)
-
-# ==========================================================
-# TRIPS BY TEMPERATURE CATEGORY
-# ==========================================================
-temp_pattern = (
-    df.groupBy("trip_date", "temp_category")
-      .agg(
-          F.count("*").alias("total_trips"),
-          F.avg("trip_duration_min").alias("avg_duration_minutes"),
-          F.avg("trip_distance").alias("avg_distance_km")
-      )
-)
-
-temp_pattern.coalesce(20).write.mode("overwrite").parquet(TEMP_PATTERN_PATH)
-
-# ==========================================================
-# TOP START STATIONS
-# ==========================================================
-top_stations = (
-    df.groupBy("trip_date", "start_station_id", "start_station_name")
-      .agg(
-          F.count("*").alias("total_trips"),
-          F.avg("trip_duration_min").alias("avg_duration_minutes"),
-          F.avg("trip_distance").alias("avg_distance_km")
-      )
-)
-
-top_stations.coalesce(30).write.mode("overwrite").parquet(TOP_STATIONS_PATH)
-
-# ==========================================================
-# STATION IMBALANCE
-# ==========================================================
-outflow = (
-    df.groupBy("trip_date", "start_station_id", "start_station_name")
-      .agg(F.count("*").alias("outflow"))
-)
-
-inflow = (
-    df.groupBy("trip_date", "end_station_id", "end_station_name")
-      .agg(F.count("*").alias("inflow"))
-      .withColumnRenamed("end_station_id", "start_station_id")
-      .withColumnRenamed("end_station_name", "start_station_name")
-)
-
-station_balance = (
-    outflow.join(
-        inflow,
-        ["start_station_id", "start_station_name", "trip_date"],
-        "outer"
+# ---------------- DIM STATION -------------
+dim_station_new = df.select(
+    col("start_station_id").alias("station_id"),
+    col("start_station_name").alias("station_name")
+).union(
+    df.select(
+        col("end_station_id").alias("station_id"),
+        col("end_station_name").alias("station_name")
     )
-    .fillna(0)
-    .withColumn("net_flow", F.col("inflow") - F.col("outflow"))
-    .withColumn(
-        "imbalance_index",
-        F.when((F.col("inflow") + F.col("outflow")) == 0, 0)
-         .otherwise(F.col("net_flow") / (F.col("inflow") + F.col("outflow")))
+).dropDuplicates()
+
+try:
+    existing_station = spark.read.parquet(GOLD_DIM + "dim_station/")
+    dim_station_raw = dim_station_new.union(
+        existing_station.select("station_id", "station_name")
+    ).dropDuplicates()
+except:
+    dim_station_raw = dim_station_new
+
+window_spec = Window.orderBy("station_id")
+dim_station = dim_station_raw.withColumn(
+    "station_key",
+    row_number().over(window_spec)
+).select("station_key", "station_id", "station_name")
+
+unknown_station = spark.createDataFrame(
+    [(-1, "UNKNOWN", "Unknown Station")],
+    ["station_key", "station_id", "station_name"]
+)
+
+dim_station = dim_station.union(unknown_station)
+dim_station.write.mode("overwrite").parquet(GOLD_DIM + "dim_station/")
+
+# ---------------- DIM BIKE ----------------
+try:
+    existing_bike = spark.read.parquet(GOLD_DIM + "dim_bike_type/")
+    dim_bike_raw = df.select("rideable_type").union(
+        existing_bike.select("rideable_type")
+    ).dropDuplicates()
+except:
+    dim_bike_raw = df.select("rideable_type").dropDuplicates()
+
+window_spec = Window.orderBy("rideable_type")
+dim_bike = dim_bike_raw.withColumn(
+    "bike_key",
+    row_number().over(window_spec)
+).select("bike_key", "rideable_type")
+
+unknown_bike = spark.createDataFrame(
+    [(-1, "Unknown")],
+    ["bike_key", "rideable_type"]
+)
+
+dim_bike = dim_bike.union(unknown_bike)
+dim_bike.write.mode("overwrite").parquet(GOLD_DIM + "dim_bike_type/")
+
+# ---------------- DIM TEMPERATURE ---------
+try:
+    existing_temp = spark.read.parquet(GOLD_DIM + "dim_temperature/")
+    dim_temp_raw = df.select("temp_category").union(
+        existing_temp.select("temp_category")
+    ).dropDuplicates()
+except:
+    dim_temp_raw = df.select("temp_category").dropDuplicates()
+
+window_spec = Window.orderBy("temp_category")
+dim_temp = dim_temp_raw.withColumn(
+    "temp_key",
+    row_number().over(window_spec)
+).select("temp_key", "temp_category")
+
+unknown_temp = spark.createDataFrame(
+    [(-1, "Unknown")],
+    ["temp_key", "temp_category"]
+)
+
+dim_temp = dim_temp.union(unknown_temp)
+dim_temp.write.mode("overwrite").parquet(GOLD_DIM + "dim_temperature/")
+
+# ==========================================================
+# ================= FACT TRIPS ==============================
+# ==========================================================
+dim_member_lu = spark.read.parquet(GOLD_DIM + "dim_member/")
+dim_station_lu = spark.read.parquet(GOLD_DIM + "dim_station/")
+dim_bike_lu = spark.read.parquet(GOLD_DIM + "dim_bike_type/")
+dim_temp_lu = spark.read.parquet(GOLD_DIM + "dim_temperature/")
+
+fact_trips = df \
+    .join(dim_member_lu, "member_casual", "left") \
+    .join(dim_bike_lu, "rideable_type", "left") \
+    .join(dim_temp_lu, "temp_category", "left") \
+    .join(
+        dim_station_lu.select(
+            col("station_id").alias("start_station_id"),
+            col("station_key").alias("start_station_key")
+        ),
+        "start_station_id",
+        "left"
+    ) \
+    .join(
+        dim_station_lu.select(
+            col("station_id").alias("end_station_id"),
+            col("station_key").alias("end_station_key")
+        ),
+        "end_station_id",
+        "left"
+    ) \
+    .select(
+        "ride_id",
+        "date_key",
+        coalesce("member_key", lit(-1)).alias("member_key"),
+        coalesce("bike_key", lit(-1)).alias("bike_key"),
+        coalesce("temp_key", lit(-1)).alias("temp_key"),
+        coalesce("start_station_key", lit(-1)).alias("start_station_key"),
+        coalesce("end_station_key", lit(-1)).alias("end_station_key"),
+        "year",
+        "month",
+        "start_hour",
+        "trip_date",
+        "trip_distance",
+        "trip_duration_min",
+        col("temp").alias("temperature"),
+        "is_rush_hour",
+        "weekend"
     )
-)
 
-station_balance.coalesce(30).write.mode("overwrite").parquet(STATION_IMBALANCE_PATH)
+fact_trips.write.mode("overwrite") \
+    .partitionBy("year", "month") \
+    .option("compression", "snappy") \
+    .parquet(GOLD_FACT + "fact_trips/")
 
-# ==========================================================
-# DAILY AGGREGATES
-# ==========================================================
-daily_agg = (
-    df.groupBy("trip_date")
-      .agg(
-          F.count("*").alias("total_trips"),
-          F.avg("trip_duration_min").alias("avg_duration_minutes"),
-          F.avg("trip_distance").alias("avg_distance_km"),
-          F.avg("temp").alias("avg_temp_f"),
-          F.sum("prcp").alias("total_precipitation")
-      )
-)
+print(f"✓ fact_trips written ({total_trips:,} rows)")
 
-daily_agg.coalesce(20).write.mode("overwrite").parquet(DAILY_AGG_PATH)
-
-# ==========================================================
-# Job Complete
-# ==========================================================
 job.commit()
-print("[JOB-3] GOLD layer generation completed successfully.")

@@ -5,16 +5,11 @@ from awsglue.utils import getResolvedOptions
 from awsglue.job import Job
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType
-from math import pi
 
 # ==========================================================
 # Job Arguments
 # ==========================================================
-args = getResolvedOptions(sys.argv, [
-    'JOB_NAME',
-    'BUCKET',
-    'YEAR'
-])
+args = getResolvedOptions(sys.argv, ['JOB_NAME','BUCKET','YEAR'])
 
 BUCKET = args['BUCKET']
 YEAR   = args['YEAR']
@@ -25,30 +20,25 @@ YEAR   = args['YEAR']
 sc = SparkContext()
 glueContext = GlueContext(sc)
 spark = glueContext.spark_session
-
 spark.conf.set("spark.sql.shuffle.partitions", "80")
 
 job = Job(glueContext)
 job.init(args['JOB_NAME'], args)
 
-print(f"[SILVER JOB] Starting for YEAR={YEAR}")
-
 # ==========================================================
-# Paths (UPDATED)
+# Paths
 # ==========================================================
+CITIBIKE_RAW = f"s3://{BUCKET}/data/raw/citibike/{YEAR}/"
+WEATHER_RAW  = f"s3://{BUCKET}/data/raw/weather/{YEAR}_weather.csv"
+SILVER_OUT   = f"s3://{BUCKET}/data/silver_new/{YEAR}/"
 
-CITIBIKE_RAW = f"s3://{BUCKET}/data/raw/citibike/"
-
-WEATHER_RAW = f"s3://{BUCKET}/data/raw/weather/{YEAR}_weather.csv"
-
-SILVER_OUT = f"s3://{BUCKET}/data/silver/{YEAR}/"
 # ==========================================================
 # Read CitiBike
 # ==========================================================
 trips = (
     spark.read
-        .option("header", "true")
-        .option("recursiveFileLookup", "true")
+        .option("header","true")
+        .option("recursiveFileLookup","true")
         .csv(CITIBIKE_RAW)
 )
 
@@ -66,15 +56,11 @@ trips = (
 )
 
 # ----------------------------------------------------------
-# Trip Date & Time
+# Trip Date & Hour
 # ----------------------------------------------------------
 trips = (
     trips
         .withColumn("trip_date", F.to_date("started_at"))
-        .withColumn("start_date", F.to_date("started_at"))
-        .withColumn("start_time", F.date_format("started_at", "HH:mm:ss"))
-        .withColumn("end_date", F.to_date("ended_at"))
-        .withColumn("end_time", F.date_format("ended_at", "HH:mm:ss"))
         .withColumn("start_hour", F.hour("started_at"))
 )
 
@@ -87,7 +73,7 @@ trips = trips.withColumn(
 )
 
 # ----------------------------------------------------------
-# Drop invalid trips
+# Drop invalid durations
 # ----------------------------------------------------------
 trips = trips.filter(
     (F.col("trip_duration_min") > 0) &
@@ -95,7 +81,7 @@ trips = trips.filter(
 )
 
 # ----------------------------------------------------------
-# NYC Bounding Box
+# NYC Bounding Box (KEEP)
 # ----------------------------------------------------------
 trips = trips.filter(
     (F.col("start_lat").between(40.4774, 40.9176)) &
@@ -108,8 +94,8 @@ trips = trips.filter(
 # Remove null critical fields
 # ----------------------------------------------------------
 trips = trips.dropna(subset=[
-    "ride_id", "started_at", "ended_at",
-    "start_station_id", "end_station_id"
+    "ride_id","started_at","ended_at",
+    "start_station_id","end_station_id"
 ])
 
 # ----------------------------------------------------------
@@ -130,54 +116,37 @@ trips = trips.withColumn(
 # ==========================================================
 weather = (
     spark.read
-        .option("header", "true")
+        .option("header","true")
         .csv(WEATHER_RAW)
+        .withColumnRenamed("DATE","raw_date")
+        .withColumn(
+            "trip_date",
+            F.to_date("raw_date", "dd-MM-yyyy")
+        )
 )
 
-weather = (
-    weather
-        .withColumnRenamed("DATE", "trip_date")
-        .withColumn("trip_date", F.to_date("trip_date"))
-)
-
-# ----------------------------------------------------------
-# Cast weather numerics
-# ----------------------------------------------------------
-weather_double_cols = [
-    "TEMP","DEWP","VISIB","WDSP","PRCP","SNDP"
-]
-
-for c in weather_double_cols:
+for c in ["TEMP","VISIB","WDSP","PRCP","SNDP"]:
     weather = weather.withColumn(c, F.col(c).cast(DoubleType()))
 
-# ----------------------------------------------------------
-# Sentinel cleanup
-# ----------------------------------------------------------
 for c in ["TEMP","VISIB","WDSP","PRCP","SNDP"]:
     weather = weather.withColumn(
         c,
-        F.when(F.col(c) == 999.9, None).otherwise(F.col(c))
+        F.when(F.col(c) == 999.9, 0.0).otherwise(F.col(c))
     )
 
-# ----------------------------------------------------------
-# Drop weather ATTR columns
-# ----------------------------------------------------------
-weather = weather.select(
-    "trip_date","TEMP","VISIB","WDSP","PRCP","SNDP","FRSHTT"
+weather = (
+    weather
+        .select("trip_date","TEMP","VISIB","WDSP","PRCP","SNDP","FRSHTT")
+        .dropDuplicates(["trip_date"])
 )
 
 # ==========================================================
 # Join Trips + Weather
 # ==========================================================
-df = trips.join(weather, on="trip_date", how="left")
-
-# ----------------------------------------------------------
-# Drop rows where weather missing (known gap dates)
-# ----------------------------------------------------------
-df = df.dropna(subset=["TEMP","VISIB","WDSP"])
+df = trips.join(weather, "trip_date", "left")
 
 # ==========================================================
-# Distance (Haversine, miles)
+# Distance (Haversine — KEEP temp columns)
 # ==========================================================
 R = 3958.8
 
@@ -206,38 +175,26 @@ df = df.drop("lat1","lon1","lat2","lon2")
 # ==========================================================
 df = (
     df
-        .withColumn("day_of_week", F.date_format("trip_date", "EEEE"))
+        .withColumn("day_of_week", F.date_format("trip_date","EEEE"))
         .withColumn("month", F.month("trip_date"))
         .withColumn("year", F.year("trip_date"))
 )
 
 df = df.withColumn(
     "season",
-    F.when(F.col("month").isin([12,1,2]), "Winter")
-     .when(F.col("month").isin([3,4,5]), "Spring")
-     .when(F.col("month").isin([6,7,8]), "Summer")
+    F.when(F.col("month").isin([12,1,2]),"Winter")
+     .when(F.col("month").isin([3,4,5]),"Spring")
+     .when(F.col("month").isin([6,7,8]),"Summer")
      .otherwise("Fall")
 )
 
-df = df.withColumn(
-    "weekend",
-    F.dayofweek("trip_date").isin([1,7]).cast("boolean")
+df = (
+    df
+        .withColumn("weekend", F.dayofweek("trip_date").isin([1,7]))
+        .withColumn("is_rush_hour", F.col("start_hour").isin([7,8,9,16,17,18]))
 )
 
-# ----------------------------------------------------------
-# Rush hour
-# ----------------------------------------------------------
-df = df.withColumn(
-    "is_rush_hour",
-    F.col("start_hour").isin([7,8,9,16,17,18]).cast("boolean")
-)
-
-# ----------------------------------------------------------
-# Holiday (US basic)
-# ----------------------------------------------------------
-HOLIDAYS = [
-    f"{YEAR}-01-01", f"{YEAR}-07-04", f"{YEAR}-12-25"
-]
+HOLIDAYS = [f"{YEAR}-01-01", f"{YEAR}-07-04", f"{YEAR}-12-25"]
 
 df = df.withColumn(
     "is_holiday",
@@ -245,9 +202,9 @@ df = df.withColumn(
 )
 
 # ==========================================================
-# Weather Flags (FRSHTT)
+# Weather Flags
 # ==========================================================
-df = df.fillna({"FRSHTT": "000000"})
+df = df.fillna({"FRSHTT":"000000"})
 
 df = (
     df
@@ -260,6 +217,18 @@ df = (
         .drop("FRSHTT")
 )
 
+# ----------------------------------------------------------
+# Rename weather columns (Athena fix)
+# ----------------------------------------------------------
+df = (
+    df
+        .withColumnRenamed("TEMP","temp")
+        .withColumnRenamed("VISIB","visib")
+        .withColumnRenamed("WDSP","wdsp")
+        .withColumnRenamed("PRCP","prcp")
+        .withColumnRenamed("SNDP","sndp")
+)
+
 # ==========================================================
 # Categories
 # ==========================================================
@@ -267,33 +236,39 @@ df = (
     df
         .withColumn(
             "temp_category",
-            F.when(F.col("TEMP") >= 75, "Warm")
-             .when(F.col("TEMP") >= 55, "Moderate")
+            F.when(F.col("temp") >= 75,"Warm")
+             .when(F.col("temp") >= 55,"Moderate")
              .otherwise("Cool")
         )
         .withColumn(
             "prcp_category",
-            F.when(F.col("PRCP") == 0, "No Rain")
-             .when(F.col("PRCP") <= 0.1, "Light")
-             .when(F.col("PRCP") <= 0.3, "Moderate")
+            F.when(F.col("prcp") == 0,"No Rain")
+             .when(F.col("prcp") <= 0.1,"Light")
+             .when(F.col("prcp") <= 0.3,"Moderate")
              .otherwise("Heavy")
         )
 )
 
 # ==========================================================
-# Final Cleanup
+# FINAL SCHEMA LOCK (CRITICAL)
 # ==========================================================
-df = df.filter(
-    (F.col("trip_distance") >= 0) &
-    (F.col("trip_duration_min") > 0)
+df = df.select(
+    "ride_id","rideable_type","member_casual",
+    "started_at","ended_at","trip_date","start_hour",
+    "start_station_id","start_station_name",
+    "end_station_id","end_station_name",
+    "start_lat","start_lng","end_lat","end_lng",
+    "trip_duration_min","trip_distance",
+    "is_round_trip","weekend","is_rush_hour","is_holiday",
+    "day_of_week","month","year","season",
+    "temp","visib","wdsp","prcp","sndp",
+    "is_fog","is_rain","is_snow","is_hail","is_thunder","is_tornado",
+    "temp_category","prcp_category"
 )
 
 # ==========================================================
 # Write Silver
 # ==========================================================
-df = df.coalesce(80)
-
-df.write.mode("overwrite").parquet(SILVER_OUT)
+df.coalesce(80).write.mode("overwrite").parquet(SILVER_OUT)
 
 job.commit()
-print("[SILVER JOB] Completed successfully")
