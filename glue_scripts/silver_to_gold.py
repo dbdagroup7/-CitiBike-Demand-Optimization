@@ -9,7 +9,7 @@ from pyspark.sql.types import StructType, StructField, IntegerType, StringType
 
 # ==========================================================
 # Job Arguments
-# ==========================================================
+# ===========================================================
 args = getResolvedOptions(sys.argv, ['JOB_NAME', 'BUCKET', 'YEAR'])
 BUCKET = args['BUCKET'].replace("s3://", "").strip("/")
 YEAR = args['YEAR']
