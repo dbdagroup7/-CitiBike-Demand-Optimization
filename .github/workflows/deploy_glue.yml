@@ -3,7 +3,7 @@ name: Deploy Glue Scripts and Trigger Workflow
 on:
   push:
     branches:
-      - Develop
+      - main
     paths:
       - glue_scripts/**
   workflow_dispatch:
