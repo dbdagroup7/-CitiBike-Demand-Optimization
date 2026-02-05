@@ -41,6 +41,7 @@ resource "aws_glue_job" "job1" {
     
     # Pass bucket as parameter for script reusability
     "--BUCKET" = var.bucket_name
+    "--YEAR"   = "2024"
   }
   
   tags = {
