@@ -170,6 +170,7 @@ This stage processes raw CitiBike and weather data using AWS Glue (PySpark) and 
 - Restricted trips to valid New York City geographic boundaries  
 - Handled missing and sentinel weather values  
 - Raw citibike data columns: 13 and raw weather data columns: 28
+- Added 4 columns to citibike that increased the column count to 17 and selected only 7 columns from 28 columns of weather data.
 
 ---
 
@@ -177,7 +178,7 @@ This stage processes raw CitiBike and weather data using AWS Glue (PySpark) and 
 - Integrated CitiBike trip data with daily weather data using `trip_date`  
 - Retained only records with valid and usable weather observations  
 - Created a unified dataset combining ride behavior with environmental conditions  
-- The merged data columns: 24
+- The merged data columns: 23
 
 ---
 
