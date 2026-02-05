@@ -1,0 +1,48 @@
+name: Deploy Glue Scripts and Trigger Workflow
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - glue_scripts/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  deploy-glue-scripts:
+    runs-on: ubuntu-latest
+
+    steps:
+ 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Validate Glue scripts (syntax check)
+        run: |
+          python -m py_compile glue_scripts/*.py
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Sync Glue scripts to S3
+        run: |
+          aws s3 sync ./glue_scripts s3://${{ secrets.S3_BUCKET_NAME }}/glue_scripts/ --delete
+
+      - name: Trigger Glue Workflow
+        if: success()
+        run: |
+          aws glue start-workflow-run \
+            --name citibike_pipeline
