@@ -332,7 +332,9 @@ Highlights seasonal demand trends and differences between member and casual ride
 
 ---
 
-## 8. Why Star Schema Pattern?
+## 8. Star Schema Design
+
+### 8(a). Star Schema Data Model
 
 <p align="center">
   <img src="images/datamodel.jpeg" width="850"/>
@@ -341,28 +343,30 @@ Highlights seasonal demand trends and differences between member and casual ride
   <b>Figure:</b> Star-Schema Based Data Model
 </p>
 
-## 8. Why We Used a Star Schema
+---
 
-The data model was designed using a star schema to achieve high performance, scalability, and analytical clarity for large, time-series CitiBike data. With a single central fact table and well-defined dimensions, the star schema enables fast queries, accurate aggregations, and intuitive analysis in Power BI.
+### 8(b). Why We Used a Star Schema
 
-### Key Reasons
+The data model was designed using a **star schema** to achieve high performance, scalability, and analytical clarity for large, time-series CitiBike data. With a single central fact table and well-defined dimension tables, the star schema enables fast queries, accurate aggregations, and intuitive analysis in Power BI.
 
-- **Analytics-Focused Use Case:**  
-  The project is built for analysis and decision-making (trip trends, user behavior, weather impact), not transactional updates, making star schema ideal for OLAP workloads.
+#### Key Reasons
 
-- **Natural Data Fit:**  
-  A central `fact_trips` table with dimensions such as date, station, member type, bike type, and temperature aligns naturally with the problem domain.
+- **Analytics-Focused Use Case**  
+  The project is built for analytical insights such as trip trends, user behavior, and demand patterns, not transactional updates—making star schema ideal for OLAP workloads.
 
-- **Performance Optimization:**  
-  Star schema reduces join complexity, improves columnar compression, and enables faster query execution and DAX evaluation, directly improving dashboard performance.
+- **Natural Data Fit**  
+  A central `fact_trips` table with dimensions like date, station, member type, bike type, and temperature aligns naturally with the CitiBike problem domain.
 
-- **Clean & Accurate Analytics:**  
-  Eliminates many-to-many relationships and ambiguous filter paths, ensuring correct totals, no double counting, and predictable filter behavior.
+- **Performance Optimization**  
+  Fewer and simpler joins, improved columnar compression, and faster DAX evaluation significantly enhance dashboard responsiveness.
 
-- **Ease of Visualization & Collaboration:**  
-  Simple structure makes the model easy to understand, reduces errors, and accelerates dashboard development.
+- **Clean & Accurate Analytics**  
+  Eliminates many-to-many relationships and ambiguous filter paths, ensuring correct aggregations, no double counting, and predictable filtering.
 
-Overall, the star schema provides a robust, scalable foundation for high-performance analytics and BI reporting.
+- **Ease of Visualization & Collaboration**  
+  A simple, intuitive model reduces development time, lowers error rates, and makes the dataset easy to understand for analytics and BI teams.
+
+Overall, the star schema provides a **robust, scalable foundation for high-performance analytics and BI reporting**.
 
 ---
 
