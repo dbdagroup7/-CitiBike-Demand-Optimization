@@ -1,12 +1,12 @@
 # 🚲 CitiBike Demand Optimization
 
-An end-to-end cloud-based data analytics and visualization platform built using NYC CitiBike trip data integrated with historical weather data to analyze demand patterns and weather impact on ridership.
+An end-to-end cloud-based data analytics and visualization platform built using NYC CitiBike trip data, enriched with selected weather parameters to analyze demand patterns and usage behavior.
 
 ---
 
 ## Project Overview
 
-The CitiBike Demand Optimization project focuses on building an end-to-end, cloud-based data analytics and visualization platform using NYC CitiBike trip data integrated with historical weather data. The objective is to analyze bike usage patterns, understand the impact of weather on ridership, and enable data-driven demand optimization through scalable analytics.
+The CitiBike Demand Optimization project focuses on building an end-to-end, cloud-based data analytics and visualization platform using NYC CitiBike trip data, enriched with selected weather parameters. The objective is to analyze bike usage patterns, user behavior, temporal demand trends, and operational factors, while incorporating weather conditions as an additional context to support data-driven demand optimization.
 
 The project follows a modern serverless data architecture on AWS, leveraging distributed ETL processing, optimized storage formats, query-on-demand analytics, and BI dashboards.
 
@@ -24,13 +24,18 @@ In this project, S3 stores raw CitiBike and weather datasets and also holds clea
 AWS Glue is a fully managed serverless service for large-scale data extraction, transformation, and loading.  
 In this project, Glue runs PySpark jobs to clean raw data, merge datasets, perform feature engineering, and generate aggregated analytical tables.
 
+**AWS Glue Crawler**  
+AWS Glue Crawler automatically discovers data schemas and updates the AWS Glue Data Catalog.  
+In this project, crawlers are used to catalog Silver and Gold layer Parquet datasets in S3, enabling seamless querying through Amazon Athena.
+
 **Amazon Athena**  
 Amazon Athena is a serverless, interactive query service that allows SQL queries directly on data stored in S3.  
-In this project, Athena is used to query curated, partitioned datasets efficiently without data movement.
+In this project, Athena is used to query curated and aggregated datasets registered in the Glue Data Catalog without data movement.
 
 **AWS IAM**  
 AWS Identity and Access Management (IAM) enables secure authentication and fine-grained authorization for AWS resources.  
-In this project, IAM roles and policies control access to S3, Glue, Athena, and Power BI connectivity.
+In this project, IAM roles and policies control access to S3, Glue jobs, Glue crawlers, Athena queries, and Power BI connectivity.
+
 
 ### Analytics & Visualization
 - Power BI – Interactive dashboards and reporting  
@@ -68,13 +73,13 @@ This project uses two datasets to analyze CitiBike demand and its dependency on 
 Based on the initial exploratory analysis, the following observations were made:
 
 ### Raw Dataset Size 
-- **Raw Citibike_2025 Data Size(CSV):** 5.38 GBs
-- **Raw Weather_2025 Data Size:** 57 KBs
+- **Raw Citibike 2024 Data Size(CSV):** 8.06 GBs
+- **Raw Weather 2024 Data Size:** 57 KBs
 
 ### Merged Dataset Size(Parquet) 
-- **Total Records:** 29.48 Million ride records  
-- **Total Columns:** 41 columns after merging CitiBike and weather datasets  
-- **File Size:** 1.65 GBs, confirming large-scale historical data  
+- **Total Records:** 44.30 Million ride records  
+- **Total Columns:** 38 columns after merging CitiBike and weather datasets  
+- **File Size:** 2.46 GBs, confirming large-scale historical data  
 
 ---
 
@@ -164,6 +169,7 @@ This stage processes raw CitiBike and weather data using AWS Glue (PySpark) and 
 - Filtered trips with unrealistic durations  
 - Restricted trips to valid New York City geographic boundaries  
 - Handled missing and sentinel weather values  
+- Raw citibike data columns: 13 and raw weather data columns: 28
 
 ---
 
@@ -171,6 +177,7 @@ This stage processes raw CitiBike and weather data using AWS Glue (PySpark) and 
 - Integrated CitiBike trip data with daily weather data using `trip_date`  
 - Retained only records with valid and usable weather observations  
 - Created a unified dataset combining ride behavior with environmental conditions  
+- The merged data columns: 24
 
 ---
 
@@ -180,7 +187,7 @@ This stage processes raw CitiBike and weather data using AWS Glue (PySpark) and 
 - Generated analytical flags: weekend, rush hour, holiday, round trip  
 - Created weather event indicators (rain, snow, fog, thunder, hail)  
 - Categorized temperature and precipitation into business-friendly groups  
-
+- Final Silver data columns: 38
 ---
 
 The final output is stored in Amazon S3 as Parquet files.
@@ -189,61 +196,90 @@ The final output is stored in Amazon S3 as Parquet files.
 
 ## 5. Initial Merged Data Dictionary (Pre-Transformation)
 
+<details>
+<summary><strong>📘 Click to expand full data dictionary</strong></summary>
+
 | Sr No | Column Name | Description | Data Type | Sample Values |
-|-----|------------|-------------|----------|---------------|
-| 1 | ride_id | Unique identifier for each ride | String | BF31E940F7D80958 |
-| 2 | rideable_type | Type of bike used | String | electric_bike, classic_bike |
-| 3 | started_at | Ride start timestamp | Datetime | 2024-07-11 08:45:00 |
-| 4 | ended_at | Ride end timestamp | Datetime | 2024-07-11 09:05:00 |
-| 5 | start_station_name | Start station name | String | N 6 St & Bedford Ave |
-| 6 | start_station_id | Start station ID | String | 5379.1 |
-| 7 | end_station_name | End station name | String | Broadway & Berry St |
-| 8 | end_station_id | End station ID | String | 5164.05 |
-| 9 | start_lat | Start latitude | Float | 40.71745 |
-| 10 | start_lng | Start longitude | Float | -73.95850 |
-| 11 | end_lat | End latitude | Float | 40.71036 |
-| 12 | end_lng | End longitude | Float | -73.96530 |
-| 13 | member_casual | Rider membership type | String | member, casual |
-| 14 | trip_date | Ride date | Date | 2024-07-11 |
-| 15 | station | Weather station number | String | 72505394728 |
-| 16 | latitude | Weather station latitude | Float | 40.77898 |
-| 17 | longitude | Weather station longitude | Float | -73.96925 |
-| 18 | elevation | Station elevation (meters) | Float | 42.7 |
-| 19 | name | Station name | String | NY CITY CENTRAL PARK |
-| 20 | TEMP | Mean temperature (°F) | Float | 76.2 |
-| 36 | PRCP | Precipitation | Float | 0.18 |
-| 39 | FRSHTT | Weather event flags | String | 010010 |
+|------:|------------|-------------|-----------|---------------|
+| 1 | ride_id | A unique ID assigned to each ride | String | BF31E940F7D80958, 0DF0EDCFF6452D83 |
+| 2 | rideable_type | Defines the type of bike | String | electric_bike, classic_bike |
+| 3 | started_at | Start time of the ride | Datetime | 2024-07-11 08:45:00 |
+| 4 | ended_at | End time of the ride | Datetime | 2024-07-11 09:05:00 |
+| 5 | start_station_name | Name of the start station | String | N 6 St & Bedford Ave |
+| 6 | start_station_id | Unique ID of the start station | String | 5379.1, 5869.04 |
+| 7 | end_station_name | Name of the end station | String | Broadway & Berry St |
+| 8 | end_station_id | Unique ID of the end station | String | 5164.05, 4824.03 |
+| 9 | start_lat | Latitude of ride start | Float | 40.71745169 |
+|10 | start_lng | Longitude of ride start | Float | -73.95850939 |
+|11 | end_lat | Latitude of ride end | Float | 40.71036129 |
+|12 | end_lng | Longitude of ride end | Float | -73.96530389 |
+|13 | member_casual | Rider type (member or casual) | String | member, casual |
+|14 | trip_date | Date of the ride | Date | 2024-07-11 |
+|15 | station | Weather station number | String | 72505394728 |
+|16 | latitude | Weather station latitude | Float | 40.77898 |
+|17 | longitude | Weather station longitude | Float | -73.96925 |
+|18 | elevation | Elevation above sea level (meters) | Float | 42.7 |
+|19 | name | Station / airport name | String | NY CITY CENTRAL PARK |
+|20 | TEMP | Mean daily temperature (°F × 0.1) | Float | 76.2 |
+|21 | TEMP_ATTRIBUTES | Temp observation count | Int | 24 |
+|22 | DEWP | Mean dew point temperature (°F × 0.1) | Float | 68.2 |
+|23 | DEWP_ATTRIBUTES | Dew point observation count | Int | 24 |
+|24 | SLP | Mean sea level pressure (mb × 0.1) | Float | 1016.1 |
+|25 | SLP_ATTRIBUTES | Sea level pressure obs count | Int | 20 |
+|26 | STP | Mean station pressure (mb × 0.1) | Float | 11.3 |
+|27 | STP_ATTRIBUTES | Station pressure obs count | Int | 24 |
+|28 | VISIB | Mean visibility (miles × 0.1) | Float | 9.3 |
+|29 | VISIB_ATTRIBUTES | Visibility obs count | Int | 24 |
+|30 | WDSP | Mean wind speed (knots × 0.1) | Float | 2.2 |
+|31 | WDSP_ATTRIBUTES | Wind speed obs count | Int | 22 |
+|32 | MXSPD | Max sustained wind speed (knots × 0.1) | Float | 5.1 |
+|33 | GUST | Maximum wind gust (knots × 0.1) | Float | 999.9 |
+|34 | MAX | Maximum temperature (°F × 0.1) | Float | 89.1 |
+|35 | MAX_ATTRIBUTES | Max temperature obs count | Int | — |
+|36 | MIN | Minimum temperature (°F × 0.1) | Float | 71.1 |
+|37 | MIN_ATTRIBUTES | Min temperature obs count | Int | — |
+|38 | PRCP | Total precipitation (inches × 0.01) | Float | 0.18 |
+|39 | PRCP_ATTRIBUTES | Precipitation source indicator | String | G |
+|40 | SNDP | Snow depth (inches × 0.1) | Float | 999.9 |
+|41 | FRSHTT | Weather event flags (Fog, Rain, Snow, Hail, Thunder, Tornado) | String | 010010 |
+
+</details>
 
 ---
 
-## 6. Gold Layer – Aggregation Tables for Analytics
+## Gold Layer – Star Schema (Facts & Dimensions)
 
-In this stage, enriched Silver-layer data is aggregated into multiple Gold-layer tables optimized for analytics and dashboard consumption.
+The Gold layer implements a star schema optimized for analytics and BI consumption.  
+Cleaned Silver data is transformed into dimension tables and a central fact table using AWS Glue (PySpark).
 
-### 6.1 Fact Table Creation
-- Central fact table with ride-level analytical attributes  
-- Partitioned by year and month  
+### Dimensions Created
+- **dim_date:** Date attributes including year, month, weekday, season, and weekend flag (partitioned by year, month)
+- **dim_member:** Rider category (member / casual) with surrogate keys
+- **dim_station:** Unified station dimension for both start and end stations
+- **dim_bike_type:** Bike type dimension (classic / electric)
+- **dim_temperature:** Temperature category dimension derived from weather data
 
-### 6.2 Time-Based Aggregations
-- Hourly aggregation for peak demand  
-- Daily aggregation for trend analysis  
+Unknown records are handled using default surrogate keys (`-1`) to maintain referential integrity.
 
-### 6.3 Bike & Weather-Based Aggregations
-- Bike type-based aggregation  
-- Temperature category-based aggregation  
+---
 
-### 6.4 Station-Level Aggregation
-- Trips started and ended per station  
-- Total station activity  
+### Fact Table: fact_trips
+- Stores ride-level metrics and foreign keys to all dimensions
+- Includes trip distance, duration, start hour, weather, rush hour and weekend flags
+- Partitioned by **year and month** to enable efficient query pruning
+- Uses **snappy compression** for optimized storage and performance
 
-### 6.5 Summary Metrics
-- Total trips  
-- Average trip distance  
-- Average trip duration  
-- Average temperature  
-- Peak usage hour  
+---
 
-All Gold-layer outputs are stored using a run-based (`run_id`) strategy.
+### Design Highlights
+- Surrogate keys generated using window functions for all dimensions
+- Date key (`YYYYMMDD`) created once and reused across the model
+- Dynamic partition overwrite enabled for safe incremental loads
+- Star schema structure enables fast joins and scalable BI queries
+
+---
+
+This Gold layer serves as the single source for analytics, dashboards, and future advanced use cases.
 
 ---
 
@@ -282,27 +318,21 @@ Analyzes rush hour demand.
 - Rush Hour vs Non-Rush Hour Usage by User Type  
 
 ### KPI 6: Weekend Usage Ratio
-Compares weekday and weekend usage.
+Givves the usage by user type.
 
 **Supporting Charts:**  
 - Weekend Usage Distribution  
 
----
+### KPI 7: Seasonal Usage Patterns
+Analyzes variation in average daily trips across seasons and user types.  
+Highlights seasonal demand trends and differences between member and casual riders.
 
-## 8. Infrastructure as Code (Terraform) & CI/CD Implementation
-
-### Infrastructure as Code (Terraform)
-- Provisioned S3 buckets for raw, silver, and gold layers  
-- Managed IAM roles for Glue and Athena  
-
-### CI/CD Pipeline (GitHub Actions)
-- Automated Glue job deployments  
-- Triggered pipelines on code updates  
-
-Terraform and CI/CD together enable a fully automated, reproducible, and production-ready data engineering workflow.
+**Supporting Charts:**  
+- Average Daily Trips by Season and Member Type
 
 ---
-## 9. Why Star Schema Pattern?
+
+## 8. Why Star Schema Pattern?
 
 <p align="center">
   <img src="images/datamodel.jpeg" width="850"/>
@@ -311,63 +341,43 @@ Terraform and CI/CD together enable a fully automated, reproducible, and product
   <b>Figure:</b> Star-Schema Based Data Model
 </p>
 
-### Why We Used a Star Schema ?
-- We designed our data model using a star schema because it provides the best balance between performance, scalability, and   analytical clarity for large, time-series data like CitiBike trips. With a single central fact table and clearly defined dimension tables, star schema ensures fast query performance, accurate aggregations, and simple, intuitive analysis in Power BI.
+## 8. Why We Used a Star Schema
 
-The Real Reasoning:
-### 1.Our Data Is Analytical, Not Transactional
+The data model was designed using a star schema to achieve high performance, scalability, and analytical clarity for large, time-series CitiBike data. With a single central fact table and well-defined dimensions, the star schema enables fast queries, accurate aggregations, and intuitive analysis in Power BI.
 
-- “Our use case is analytics and decision-making, not transactional updates.”
+### Key Reasons
 
-- We are analyzing:
-  - Trip counts
-  - Usage patterns
-  - Weather impact
-  - User behavior
+- **Analytics-Focused Use Case:**  
+  The project is built for analysis and decision-making (trip trends, user behavior, weather impact), not transactional updates, making star schema ideal for OLAP workloads.
 
-- Not inserting/updating individual records
-- Star schema is purpose-built for analytics (OLAP).
+- **Natural Data Fit:**  
+  A central `fact_trips` table with dimensions such as date, station, member type, bike type, and temperature aligns naturally with the problem domain.
 
-### 2.Central Fact, Multiple Dimensions Fit Our Problem Perfectly
-- Our model naturally fits:
-  - Fact table → fact_trips
-  - Measures: trips, duration, rush hour, stress
-  - Dimensions:
-      - Date
-      - Station
-      - Member type
-      - Bike type
-      - Temperature
-It is not forced design — it’s natural design.
+- **Performance Optimization:**  
+  Star schema reduces join complexity, improves columnar compression, and enables faster query execution and DAX evaluation, directly improving dashboard performance.
 
-### 3.Performance Was a Major Driver
-- We are working with large datasets coming from s3, so query performance was critical.
-- Star schema helps because:
-   - Fewer joins
-   - Simple joins (dimension → fact)
-   - Efficient columnar compression (VertiPaq)
+- **Clean & Accurate Analytics:**  
+  Eliminates many-to-many relationships and ambiguous filter paths, ensuring correct totals, no double counting, and predictable filter behavior.
 
-Faster DAX evaluation
-- This directly solved:
-   - Slow visuals
-   - Long refresh times
-   - Aggregation delays
+- **Ease of Visualization & Collaboration:**  
+  Simple structure makes the model easy to understand, reduces errors, and accelerates dashboard development.
 
-### 4.Avoided Complex Relationships and Ambiguity
-- Star schema eliminates many-to-many relationships and ambiguous filter paths.
-- Why this matters:
-  - Accurate totals
-  - No double counting
-  - Predictable filter behavior
-  - Cleaner DAX
-
-### 5.Simpler for Visualization & Collaboration
-- Star schema makes the model easier to understand and use, especially for visualization teams.
-- Benefits:
-  - Clear fields
-  - No confusing joins
-  - Faster development
-  - Lower error rate
+Overall, the star schema provides a robust, scalable foundation for high-performance analytics and BI reporting.
 
 ---
 
+## 9. Infrastructure as Code (Terraform) & CI/CD
+
+### Infrastructure as Code (Terraform)
+- Terraform manages AWS infrastructure including S3 buckets, IAM roles, Glue jobs, workflows, and crawlers  
+- Infrastructure changes are applied automatically based on updates to Terraform code, ensuring consistency and repeatability  
+
+### CI/CD Pipeline (GitHub Actions)
+- Separate pipelines are implemented for Terraform infrastructure and Glue ETL scripts  
+- Path-based triggers ensure independent execution for infrastructure changes and ETL code updates  
+- Glue scripts are validated, deployed to Amazon S3, and Glue workflows are triggered safely  
+- Manual pipeline triggers are supported for controlled infrastructure deployments  
+
+Together, Terraform and CI/CD provide a **fully automated, reliable, and production-aligned data pipeline**.
+
+---
