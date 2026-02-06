@@ -151,7 +151,7 @@ EDA findings directly influenced data cleaning rules, feature engineering logic,
 ## 3. Project Architecture
 
 <p align="center">
-  <img src="images/architecture.jpg" width="850"/>
+  <img src="images/architecture.png" width="850"/>
 </p>
 <p align="center">
   <b>Figure:</b> End-to-end architecture of the CitiBike Demand Optimization pipeline
