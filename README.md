@@ -84,7 +84,7 @@ Based on the initial exploratory analysis, the following observations were made:
 ---
 
 ### Time Coverage
-- **Ride Data Period:** Covers all months from January to August 2025  
+- **Ride Data Period:** Covers all months from January to December 2024  
 - **Weather Data Granularity:** Daily observations aligned with ride dates  
 - Data shows continuous temporal coverage with no major gaps in dates  
 
