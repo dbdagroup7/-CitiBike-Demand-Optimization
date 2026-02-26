@@ -41,7 +41,7 @@ GOLD_DIM  = f"s3://{BUCKET}/data/gold/dimensions/"
 df = spark.read.parquet(SILVER_IN).cache()
 total_trips = df.count()
 
-assert "temp" in df.columns, "❌ temp column missing from Silver layer"
+assert "temp" in df.columns, "temp column missing from Silver layer"
 
 print(f"Silver records for {YEAR}: {total_trips:,}")
 
